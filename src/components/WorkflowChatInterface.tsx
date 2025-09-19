@@ -5,10 +5,11 @@ import {
   ArrowLeft,
   CheckCircle,
   Clock,
-  FileText,
+  Zap,
   Target,
   Sparkles,
   Brain,
+  FileText,
 } from "lucide-react";
 import Sidebar from "./Sidebar";
 import FetchContextModal from "./FetchContextModal";
@@ -48,21 +49,16 @@ export default function WorkflowChatInterface({
     analyzeDataLoading,
   } = useWorkflow(sessionId);
 
-  // === Handlers ===
   const handleNewChat = () => setShowFetchModal(true);
-
   const handleContextFetched = (summary: string, prompt: string) => {
     fetchContext({ prompt });
     setShowFetchModal(false);
   };
-
   const handleStartAnalysis = () => setCurrentStep("analyze");
-
   const handleAnalyzeData = () => {
     if (!userPrompt.trim() || !currentChatId) return;
     analyzeData({ chatId: currentChatId, text: userPrompt });
   };
-
   const handleAnalysisEdited = (editedAnalysis: string) => {
     setAgentAnalysis(editedAnalysis);
     setMessages((prev) =>
@@ -74,11 +70,7 @@ export default function WorkflowChatInterface({
     );
     setCurrentStep("generate-testcases");
   };
-
-  const handleGenerateTestCases = () => {
-    setShowTestCaseModal(true);
-  };
-
+  const handleGenerateTestCases = () => setShowTestCaseModal(true);
   const handleTestCasesGenerated = (testCases: any[]) => {
     const testCaseMessage = {
       id: `testcases-${Date.now()}`,
@@ -91,7 +83,6 @@ export default function WorkflowChatInterface({
     setCurrentStep("complete");
   };
 
-  // === Workflow Steps ===
   const getWorkflowSteps = () => [
     {
       id: "no-chat",
@@ -154,7 +145,6 @@ export default function WorkflowChatInterface({
     );
   };
 
-  // === Loading State ===
   if (chatsLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
@@ -170,11 +160,9 @@ export default function WorkflowChatInterface({
     );
   }
 
-  // === UI ===
   return (
     <>
       <div className="flex h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        {/* Sidebar */}
         <Sidebar
           sessionId={sessionId}
           chats={chats}
@@ -184,7 +172,7 @@ export default function WorkflowChatInterface({
         />
 
         <div className="flex-1 flex flex-col">
-          {/* Header */}
+          {/* Compact Header with Progress */}
           <header className="bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 p-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -332,12 +320,12 @@ export default function WorkflowChatInterface({
                 <Sparkles className="w-10 h-10 text-purple-400 mx-auto mb-3" />
                 <h3 className="text-white text-lg mb-2">Analysis Complete</h3>
                 <p className="text-slate-400 mb-4">
-                  Refine the analysis prompt before generating test cases
+                  Generate test cases from the refined analysis
                 </p>
                 <textarea
                   value={refinementPrompt}
                   onChange={(e) => setRefinementPrompt(e.target.value)}
-                  placeholder="e.g., Focus on edge cases and data privacy vulnerabilities..."
+                  placeholder="e.g., Refine analysis for edge cases and security vulnerabilities..."
                   className="w-full p-4 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white min-h-[120px] mb-4"
                 />
                 <button
@@ -362,7 +350,6 @@ export default function WorkflowChatInterface({
         </div>
       </div>
 
-      {/* Modals */}
       <FetchContextModal
         isOpen={showFetchModal}
         onClose={() => setShowFetchModal(false)}
