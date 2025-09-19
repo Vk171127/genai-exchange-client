@@ -5,15 +5,7 @@ import Sidebar from "./Sidebar";
 import FetchContextModal from "./FetchContextModal";
 import AnalysisEditor from "./AnalysisEditor";
 import TestCaseModal from "./TestCaseModal";
-import type { Message, Chat } from "@/lib/types";
-
-type WorkflowStep =
-  | "no-chat"
-  | "context-fetched"
-  | "analyze"
-  | "edit-analysis"
-  | "generate-testcases"
-  | "complete";
+import { useWorkflow } from "@/hooks/useWorkflow";
 
 interface WorkflowChatInterfaceProps {
   sessionId: string;
@@ -22,95 +14,46 @@ interface WorkflowChatInterfaceProps {
 export default function WorkflowChatInterface({
   sessionId,
 }: WorkflowChatInterfaceProps) {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>("no-chat");
-  const [userPrompt, setUserPrompt] = useState("");
-  const [agentAnalysis, setAgentAnalysis] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Modals
   const [showFetchModal, setShowFetchModal] = useState(false);
   const [showTestCaseModal, setShowTestCaseModal] = useState(false);
 
   const router = useRouter();
 
+  const {
+    currentChatId,
+    setCurrentChatId,
+    currentStep,
+    setCurrentStep,
+    messages,
+    setMessages,
+    userPrompt,
+    setUserPrompt,
+    agentAnalysis,
+    setAgentAnalysis,
+    chats,
+    chatsLoading,
+    fetchContext,
+    fetchContextLoading,
+    analyzeData,
+    analyzeDataLoading,
+  } = useWorkflow(sessionId);
+
   const handleNewChat = () => {
-    // Immediately show fetch context modal when "New Chat" is clicked
     setShowFetchModal(true);
   };
 
-  const handleContextFetched = (summary: string) => {
-    // Create new chat
-    const newChatId = `chat-${Date.now()}`;
-    const newChat: Chat = {
-      id: newChatId,
-      title: "Healthcare Analysis",
-      session_id: sessionId,
-      last_message: "Context fetched",
-      updated_at: new Date().toISOString(),
-    };
-
-    setChats((prev) => [newChat, ...prev]);
-    setCurrentChatId(newChatId);
-
-    // Add context message
-    const contextMessage: Message = {
-      id: `ctx-${Date.now()}`,
-      role: "system",
-      text: `Context Retrieved: ${summary}`,
-      created_at: new Date().toISOString(),
-      chat_id: newChatId,
-    };
-
-    setMessages([contextMessage]);
-    setCurrentStep("context-fetched"); // Show "Start Analysis" button
+  const handleContextFetched = (summary: string, prompt: string) => {
+    fetchContext({ prompt });
+    setShowFetchModal(false);
   };
 
   const handleStartAnalysis = () => {
     setCurrentStep("analyze");
   };
 
-  const handleAnalyzeData = async () => {
+  const handleAnalyzeData = () => {
     if (!userPrompt.trim() || !currentChatId) return;
-
-    setLoading(true);
-
-    // Add user message
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      role: "user",
-      text: userPrompt,
-      created_at: new Date().toISOString(),
-      chat_id: currentChatId,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-
-    try {
-      // TODO: need to attach api here - call analysis API
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const analysisText = `Analysis of "${userPrompt}":\n\n1. Healthcare Compliance Requirements:\n   - HIPAA privacy and security compliance\n   - Patient data encryption standards\n   - Audit logging requirements\n\n2. Test Case Categories:\n   - Authentication and authorization tests\n   - Data validation and sanitization\n   - Error handling and edge cases\n   - Integration with medical devices\n\n3. Risk Assessment:\n   - High: Patient data exposure\n   - Medium: System downtime impact\n   - Low: UI/UX inconsistencies`;
-
-      setAgentAnalysis(analysisText);
-
-      const agentMessage: Message = {
-        id: `analysis-${Date.now()}`,
-        role: "agent",
-        text: analysisText,
-        created_at: new Date().toISOString(),
-        chat_id: currentChatId,
-      };
-
-      setMessages((prev) => [...prev, agentMessage]);
-      setCurrentStep("edit-analysis");
-    } catch (error) {
-      console.error("Analysis error:", error);
-    } finally {
-      setLoading(false);
-    }
+    analyzeData({ chatId: currentChatId, text: userPrompt });
   };
 
   const handleAnalysisEdited = (editedAnalysis: string) => {
@@ -132,9 +75,9 @@ export default function WorkflowChatInterface({
   };
 
   const handleTestCasesGenerated = (testCases: any[]) => {
-    const testCaseMessage: Message = {
+    const testCaseMessage = {
       id: `testcases-${Date.now()}`,
-      role: "system",
+      role: "system" as const,
       text: `Generated ${testCases.length} test cases successfully. Test cases validated and ready for ALM integration.`,
       created_at: new Date().toISOString(),
       chat_id: currentChatId!,
@@ -163,6 +106,14 @@ export default function WorkflowChatInterface({
     }
   };
 
+  if (chatsLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-gray-500">Loading session...</div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="flex h-screen bg-gray-50">
@@ -184,6 +135,7 @@ export default function WorkflowChatInterface({
                 </h1>
                 <p className="text-sm text-gray-500">
                   {getStepDescription()} | Session: {sessionId}
+                  {fetchContextLoading && " | Fetching context..."}
                 </p>
               </div>
               <button
@@ -210,7 +162,6 @@ export default function WorkflowChatInterface({
             </div>
           ) : currentStep === "context-fetched" ? (
             <div className="flex-1 flex flex-col">
-              {/* Show context message */}
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="max-w-4xl mx-auto space-y-4">
                   {messages.map((message) => (
@@ -233,7 +184,6 @@ export default function WorkflowChatInterface({
                 </div>
               </div>
 
-              {/* Start Analysis Button */}
               <div className="border-t bg-white p-4">
                 <div className="max-w-4xl mx-auto text-center">
                   <p className="text-gray-600 mb-4">
@@ -251,7 +201,6 @@ export default function WorkflowChatInterface({
             </div>
           ) : (
             <>
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="max-w-4xl mx-auto space-y-4">
                   {messages.map((message) => (
@@ -291,7 +240,6 @@ export default function WorkflowChatInterface({
                 </div>
               </div>
 
-              {/* Action Area */}
               <div className="border-t bg-white p-4">
                 <div className="max-w-4xl mx-auto">
                   {currentStep === "analyze" && (
@@ -307,10 +255,10 @@ export default function WorkflowChatInterface({
                       />
                       <button
                         onClick={handleAnalyzeData}
-                        disabled={loading || !userPrompt.trim()}
+                        disabled={analyzeDataLoading || !userPrompt.trim()}
                         className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                       >
-                        {loading ? "Analyzing..." : "Analyze Data"}
+                        {analyzeDataLoading ? "Analyzing..." : "Analyze Data"}
                       </button>
                     </div>
                   )}
@@ -353,12 +301,12 @@ export default function WorkflowChatInterface({
         </div>
       </div>
 
-      {/* Modals */}
       <FetchContextModal
         isOpen={showFetchModal}
         onClose={() => setShowFetchModal(false)}
         onContextFetched={handleContextFetched}
         sessionId={sessionId}
+        loading={fetchContextLoading}
       />
 
       <TestCaseModal

@@ -1,3 +1,4 @@
+// FILE 1: src/components/FetchContextModal.tsx (FIXED - pass both parameters)
 "use client";
 import React, { useState } from "react";
 import { X } from "lucide-react";
@@ -6,8 +7,9 @@ import { fetchRAGContext } from "@/lib/api";
 interface FetchContextModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onContextFetched: (summary: string) => void;
+  onContextFetched: (summary: string, prompt: string) => void;
   sessionId: string;
+  loading?: boolean;
 }
 
 export default function FetchContextModal({
@@ -15,24 +17,21 @@ export default function FetchContextModal({
   onClose,
   onContextFetched,
   sessionId,
+  loading = false,
 }: FetchContextModalProps) {
   const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const handleFetch = async () => {
     if (!prompt.trim()) return;
 
-    setLoading(true);
     try {
       // TODO: need to attach api here
       const response = await fetchRAGContext(sessionId, prompt);
-      onContextFetched(response.summary);
+      onContextFetched(response.summary, prompt); // Pass both parameters
       onClose();
       setPrompt("");
     } catch (error) {
       console.error("Fetch context error:", error);
-    } finally {
-      setLoading(false);
     }
   };
 

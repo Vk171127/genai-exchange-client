@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import QueryProvider from "@/components/QueryProvider";
 
 export const metadata: Metadata = {
-  title: "TestGen - AI Test Case Generator",
-  description: "Chat-driven test case generation platform",
+  title: "Healthcare TestGen - AI Test Case Generator",
+  description:
+    "Automated test case generation for healthcare applications with HIPAA compliance",
 };
 
 export default function RootLayout({
@@ -13,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

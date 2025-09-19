@@ -1,0 +1,124 @@
+"use client";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getChats, sendMessage, fetchRAGContext } from "@/lib/api";
+import type { Message, Chat } from "@/lib/types";
+
+type WorkflowStep =
+  | "no-chat"
+  | "context-fetched"
+  | "analyze"
+  | "edit-analysis"
+  | "generate-testcases"
+  | "complete";
+
+export function useWorkflow(sessionId: string) {
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>("no-chat");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [userPrompt, setUserPrompt] = useState("");
+  const [agentAnalysis, setAgentAnalysis] = useState("");
+
+  const queryClient = useQueryClient();
+
+  // Fetch chats for session
+  const { data: chatsData, isLoading: chatsLoading } = useQuery({
+    queryKey: ["chats", sessionId],
+    queryFn: () => getChats(sessionId),
+    enabled: !!sessionId,
+  });
+
+  // Fetch RAG context mutation
+  const fetchContextMutation = useMutation({
+    mutationFn: ({ prompt }: { prompt: string }) =>
+      fetchRAGContext(sessionId, prompt),
+    onSuccess: (data, variables) => {
+      // Create new chat
+      const newChatId = `chat-${Date.now()}`;
+      const newChat: Chat = {
+        id: newChatId,
+        title: "Healthcare Analysis",
+        session_id: sessionId,
+        last_message: "Context fetched",
+        updated_at: new Date().toISOString(),
+      };
+
+      // Update chats cache
+      queryClient.setQueryData(["chats", sessionId], (old: any) => ({
+        chats: [newChat, ...(old?.chats || [])],
+      }));
+
+      // Set current chat and add context message
+      setCurrentChatId(newChatId);
+      const contextMessage: Message = {
+        id: `ctx-${Date.now()}`,
+        role: "system",
+        text: `Context Retrieved: ${data.summary}`,
+        created_at: new Date().toISOString(),
+        chat_id: newChatId,
+      };
+
+      setMessages([contextMessage]);
+      setCurrentStep("context-fetched");
+    },
+  });
+
+  // Send message mutation
+  const analyzeDataMutation = useMutation({
+    mutationFn: ({ chatId, text }: { chatId: string; text: string }) =>
+      sendMessage(chatId, text),
+    onMutate: ({ text }) => {
+      // Optimistically add user message
+      const userMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: "user",
+        text,
+        created_at: new Date().toISOString(),
+        chat_id: currentChatId!,
+      };
+      setMessages((prev) => [...prev, userMessage]);
+    },
+    onSuccess: (data) => {
+      // Generate analysis
+      const analysisText = `Analysis of "${userPrompt}":\n\n1. Healthcare Compliance Requirements:\n   - HIPAA privacy and security compliance\n   - Patient data encryption standards\n   - Audit logging requirements\n\n2. Test Case Categories:\n   - Authentication and authorization tests\n   - Data validation and sanitization\n   - Error handling and edge cases\n   - Integration with medical devices\n\n3. Risk Assessment:\n   - High: Patient data exposure\n   - Medium: System downtime impact\n   - Low: UI/UX inconsistencies`;
+
+      setAgentAnalysis(analysisText);
+
+      const agentMessage: Message = {
+        id: `analysis-${Date.now()}`,
+        role: "agent",
+        text: analysisText,
+        created_at: new Date().toISOString(),
+        chat_id: currentChatId!,
+      };
+
+      setMessages((prev) => [...prev, agentMessage]);
+      setCurrentStep("edit-analysis");
+    },
+  });
+
+  return {
+    // State
+    currentChatId,
+    setCurrentChatId,
+    currentStep,
+    setCurrentStep,
+    messages,
+    setMessages,
+    userPrompt,
+    setUserPrompt,
+    agentAnalysis,
+    setAgentAnalysis,
+
+    // Data
+    chats: chatsData?.chats || [],
+    chatsLoading,
+
+    // Mutations
+    fetchContext: fetchContextMutation.mutate,
+    fetchContextLoading: fetchContextMutation.isPending,
+
+    analyzeData: analyzeDataMutation.mutate,
+    analyzeDataLoading: analyzeDataMutation.isPending,
+  };
+}
