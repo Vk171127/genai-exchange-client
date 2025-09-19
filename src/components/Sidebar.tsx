@@ -5,10 +5,10 @@ import {
   ArrowLeft,
   MessageSquare,
   Bot,
-  Clock,
   CheckCircle,
   Zap,
   Activity,
+  Settings,
 } from "lucide-react";
 import type { Chat } from "@/lib/types";
 
@@ -20,35 +20,31 @@ interface SidebarProps {
   onNewChat?: () => void;
 }
 
-function Sidebar(props: SidebarProps) {
-  const {
-    sessionId,
-    chats = [],
-    currentChatId,
-    onChatSelect,
-    onNewChat,
-  } = props;
+export default function Sidebar({
+  sessionId,
+  chats = [],
+  currentChatId,
+  onChatSelect,
+  onNewChat,
+}: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const getChatIcon = (title: string) => {
     if (
       title.toLowerCase().includes("security") ||
       title.toLowerCase().includes("hipaa")
-    ) {
+    )
       return Bot;
-    }
     if (
       title.toLowerCase().includes("data") ||
       title.toLowerCase().includes("validation")
-    ) {
+    )
       return CheckCircle;
-    }
     if (
       title.toLowerCase().includes("analysis") ||
       title.toLowerCase().includes("test")
-    ) {
+    )
       return Zap;
-    }
     return MessageSquare;
   };
 
@@ -57,52 +53,50 @@ function Sidebar(props: SidebarProps) {
     const updated = new Date(updatedAt);
     const diffHours = Math.abs(now.getTime() - updated.getTime()) / 36e5;
 
-    if (diffHours < 1)
-      return { label: "Active", color: "text-green-400", dot: "bg-green-400" };
-    if (diffHours < 24)
-      return { label: "Recent", color: "text-blue-400", dot: "bg-blue-400" };
-    return { label: "Idle", color: "text-gray-400", dot: "bg-gray-400" };
+    if (diffHours < 1) return { label: "Live", dot: "bg-green-400" };
+    if (diffHours < 24) return { label: "Recent", dot: "bg-blue-400" };
+    return { label: "Idle", dot: "bg-gray-400" };
   };
 
   return (
     <aside
-      className={`relative bg-slate-900/80 backdrop-blur-md border-r border-slate-700/50 flex flex-col shadow-2xl transition-all duration-500 ease-out ${
-        collapsed ? "w-20" : "w-80"
+      className={`relative bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/40 flex flex-col shadow-2xl transition-all duration-300 ease-out ${
+        collapsed ? "w-16" : "w-72"
       }`}
     >
-      {/* Animated Background Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-transparent to-purple-900/20 pointer-events-none"></div>
+      {/* Subtle animated background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none" />
 
       {/* Collapse Toggle */}
       <button
-        className="absolute -right-4 top-8 z-20 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full p-2 shadow-lg transition-all duration-300 hover:scale-110"
-        onClick={() => setCollapsed((c) => !c)}
+        className="absolute -right-3 top-6 z-20 bg-slate-800/90 hover:bg-slate-700 border border-slate-600/50 rounded-full p-1.5 shadow-lg transition-all duration-200 hover:scale-105"
+        onClick={() => setCollapsed(!collapsed)}
         aria-label="Toggle sidebar"
       >
         <ArrowLeft
-          className={`w-4 h-4 text-slate-300 transition-transform duration-300 ${
+          className={`w-3 h-3 text-slate-300 transition-transform duration-200 ${
             collapsed ? "rotate-180" : ""
           }`}
         />
       </button>
 
       {/* Header */}
-      <div className="relative z-10 p-6 border-b border-slate-700/50">
-        <div className="flex items-center gap-4">
+      <div className="relative z-10 p-4 border-b border-slate-700/40">
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <span className="text-lg font-bold text-white">HT</span>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md">
+              <span className="text-sm font-bold text-white">HT</span>
             </div>
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-slate-900 animate-pulse"></div>
+            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-400 rounded-full border border-slate-900 animate-pulse" />
           </div>
 
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <h2 className="font-bold text-white text-lg tracking-tight">
+              <h2 className="font-bold text-white text-base tracking-tight">
                 Healthcare TestGen
               </h2>
-              <p className="text-slate-400 text-sm truncate">
-                Session: {sessionId.slice(-8)}
+              <p className="text-slate-400 text-xs truncate">
+                Session: {sessionId.slice(-6)}
               </p>
             </div>
           )}
@@ -110,29 +104,26 @@ function Sidebar(props: SidebarProps) {
       </div>
 
       {/* New Chat Button */}
-      <div className="relative z-10 p-4">
+      <div className="relative z-10 p-3">
         <button
           onClick={() => onNewChat?.()}
-          className={`group w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 hover:scale-105 ${
-            collapsed ? "justify-center" : ""
+          className={`group w-full flex items-center gap-2.5 px-3 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-sm ${
+            collapsed ? "justify-center px-2" : ""
           }`}
         >
-          <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-          {!collapsed && <span>New Healthcare Chat</span>}
-
-          {/* Glow effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl opacity-0 group-hover:opacity-20 blur transition-opacity"></div>
+          <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
+          {!collapsed && <span>New Analysis</span>}
         </button>
       </div>
 
       {/* Chat List Header */}
       {!collapsed && (
-        <div className="relative z-10 px-6 py-2">
+        <div className="relative z-10 px-4 py-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Analysis Chats
+            <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+              Active Chats
             </h3>
-            <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-full">
+            <span className="text-xs bg-slate-800/60 text-slate-300 px-1.5 py-0.5 rounded">
               {chats.length}
             </span>
           </div>
@@ -141,22 +132,22 @@ function Sidebar(props: SidebarProps) {
 
       {/* Chat List */}
       <div className="relative z-10 flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-          <div className="px-3 pb-4 space-y-2">
+        <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+          <div className="px-2 pb-3 space-y-1">
             {chats.length === 0 ? (
               <div
-                className={`text-center py-8 ${collapsed ? "px-2" : "px-4"}`}
+                className={`text-center py-6 ${collapsed ? "px-1" : "px-3"}`}
               >
                 {!collapsed ? (
                   <div className="text-slate-400">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">No analysis chats yet</p>
+                    <MessageSquare className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">No chats yet</p>
                     <p className="text-xs mt-1 opacity-75">
-                      Start with "New Chat"
+                      Click "New Analysis"
                     </p>
                   </div>
                 ) : (
-                  <MessageSquare className="w-6 h-6 text-slate-400 opacity-50" />
+                  <MessageSquare className="w-5 h-5 text-slate-400 opacity-50 mx-auto" />
                 )}
               </div>
             ) : (
@@ -169,37 +160,35 @@ function Sidebar(props: SidebarProps) {
                   <button
                     key={chat.id}
                     onClick={() => onChatSelect?.(chat.id)}
-                    className={`group w-full flex items-center gap-3 text-left p-3 rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 ${
+                    className={`group w-full flex items-center gap-2.5 text-left p-2.5 rounded-lg transition-all duration-200 ${
                       isActive
-                        ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg scale-105"
-                        : "hover:bg-slate-800/50 border border-transparent"
-                    } ${collapsed ? "justify-center" : ""}`}
+                        ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-md"
+                        : "hover:bg-slate-800/40 border border-transparent hover:border-slate-600/30"
+                    } ${collapsed ? "justify-center px-2" : ""}`}
                   >
                     {/* Chat Icon */}
                     <div
-                      className={`relative flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                      className={`relative flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
                         isActive
-                          ? "bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg"
-                          : "bg-slate-800 group-hover:bg-slate-700"
+                          ? "bg-gradient-to-br from-blue-500 to-purple-600 shadow-sm"
+                          : "bg-slate-700/60 group-hover:bg-slate-700"
                       }`}
                     >
                       <ChatIcon
-                        className={`w-5 h-5 ${
+                        className={`w-3.5 h-3.5 ${
                           isActive ? "text-white" : "text-slate-300"
                         }`}
                       />
-
-                      {/* Status dot */}
                       <div
-                        className={`absolute -top-0.5 -right-0.5 w-3 h-3 ${status.dot} rounded-full border-2 border-slate-900`}
-                      ></div>
+                        className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${status.dot} rounded-full border border-slate-900`}
+                      />
                     </div>
 
                     {!collapsed && (
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center justify-between mb-0.5">
                           <h4
-                            className={`font-medium text-sm truncate ${
+                            className={`font-medium text-xs truncate ${
                               isActive
                                 ? "text-white"
                                 : "text-slate-200 group-hover:text-white"
@@ -207,7 +196,11 @@ function Sidebar(props: SidebarProps) {
                           >
                             {chat.title}
                           </h4>
-                          <span className={`text-xs ${status.color}`}>
+                          <span
+                            className={`text-xs ${
+                              isActive ? "text-blue-300" : "text-slate-500"
+                            }`}
+                          >
                             {status.label}
                           </span>
                         </div>
@@ -219,10 +212,10 @@ function Sidebar(props: SidebarProps) {
                               : "text-slate-400 group-hover:text-slate-300"
                           }`}
                         >
-                          {chat.last_message || "No messages yet"}
+                          {chat.last_message || "No messages"}
                         </p>
 
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center justify-between mt-1">
                           <span
                             className={`text-xs ${
                               isActive ? "text-blue-300" : "text-slate-500"
@@ -239,7 +232,7 @@ function Sidebar(props: SidebarProps) {
 
                           {isActive && (
                             <div className="flex items-center gap-1">
-                              <Activity className="w-3 h-3 text-green-400 animate-pulse" />
+                              <Activity className="w-2.5 h-2.5 text-green-400 animate-pulse" />
                               <span className="text-xs text-green-400">
                                 Active
                               </span>
@@ -247,11 +240,6 @@ function Sidebar(props: SidebarProps) {
                           )}
                         </div>
                       </div>
-                    )}
-
-                    {/* Active indicator line */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-600 rounded-r-full"></div>
                     )}
                   </button>
                 );
@@ -262,25 +250,23 @@ function Sidebar(props: SidebarProps) {
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 p-4 border-t border-slate-700/50">
+      <div className="relative z-10 p-3 border-t border-slate-700/40">
         {!collapsed ? (
-          <div className="text-center">
-            <div className="text-xs text-slate-500 mb-2">
-              AI-Powered Healthcare Testing
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-xs text-slate-500">System Ready</span>
             </div>
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-600">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              System Ready
-            </div>
+            <button className="p-1 hover:bg-slate-700/50 rounded transition-colors">
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+            </button>
           </div>
         ) : (
           <div className="flex justify-center">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
           </div>
         )}
       </div>
     </aside>
   );
 }
-
-export default Sidebar;
