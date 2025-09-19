@@ -140,7 +140,7 @@ export default function WorkflowChatInterface({
               </div>
               <button
                 onClick={() => router.push("/dashboard")}
-                className="text-blue-600 hover:text-blue-700 text-sm"
+                className="text-blue-600 hover:text-blue-700 text-sm cursor-pointer"
               >
                 ← Back to Dashboard
               </button>
@@ -192,7 +192,7 @@ export default function WorkflowChatInterface({
                   </p>
                   <button
                     onClick={handleStartAnalysis}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer"
                   >
                     Start New Healthcare Analysis
                   </button>
@@ -256,7 +256,7 @@ export default function WorkflowChatInterface({
                       <button
                         onClick={handleAnalyzeData}
                         disabled={analyzeDataLoading || !userPrompt.trim()}
-                        className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                        className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 cursor-pointer"
                       >
                         {analyzeDataLoading ? "Analyzing..." : "Analyze Data"}
                       </button>
@@ -277,7 +277,7 @@ export default function WorkflowChatInterface({
                       </p>
                       <button
                         onClick={handleGenerateTestCases}
-                        className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                        className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 cursor-pointer"
                       >
                         Generate Test Cases
                       </button>

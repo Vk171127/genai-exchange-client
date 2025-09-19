@@ -19,6 +19,15 @@
   }
 }
 
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap");
+body {
+  background: linear-gradient(120deg, #f0f4ff 0%, #e0e7ff 100%);
+  min-height: 100vh;
+  color: var(--foreground);
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+  transition: background 0.5s;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -39,11 +48,50 @@ body {
   max-width: 70%;
 }
 
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.message-user,
+.message-agent,
+.message-system {
+  animation: popIn 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.btn-glow {
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  transition: box-shadow 0.3s;
+}
+.btn-glow:hover {
+  box-shadow: 0 0 16px 4px rgba(59, 130, 246, 0.5);
+}
+
 .message-agent {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   margin-right: auto;
   max-width: 70%;
+}
+
+body {
+  background: linear-gradient(120deg, #232946 0%, #121629 100%);
 }
 
 .message-system {
