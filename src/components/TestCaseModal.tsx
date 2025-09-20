@@ -10,6 +10,8 @@ import {
   Copy,
   Download,
 } from "lucide-react";
+import { generateTestCases } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
 
 interface TestCase {
   id: string;
@@ -42,79 +44,19 @@ export default function TestCaseModal({
   const [generating, setGenerating] = useState(false);
   const [generatedTestCases, setGeneratedTestCases] = useState<TestCase[]>([]);
 
+  const searchParams = useSearchParams();
+  const sessionId = searchParams?.get("sessionId");
   const handleGenerate = async () => {
     setGenerating(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // TODO: need to get prompt from the chat messages
+      const prompt =
+        "Generate comprehensive test cases for the refined analysis.";
+      const response = await generateTestCases(sessionId!, prompt);
 
-      const mockTestCases: TestCase[] = [
-        {
-          id: "HTC001",
-          title: "Patient Login Authentication - HIPAA Compliance",
-          description:
-            "Verify patient authentication meets HIPAA security requirements with proper encryption",
-          priority: "Critical",
-          type: "Security",
-          steps: [
-            "Navigate to patient portal login",
-            "Enter valid patient credentials",
-            "Verify encryption during transmission",
-            "Check session timeout compliance",
-          ],
-          expected:
-            "Patient successfully authenticated with HIPAA-compliant security measures",
-        },
-        {
-          id: "HTC002",
-          title: "PHI Data Encryption Validation",
-          description:
-            "Ensure all Protected Health Information is encrypted at rest and in transit",
-          priority: "Critical",
-          type: "Compliance",
-          steps: [
-            "Access patient medical records",
-            "Verify data encryption standards",
-            "Test database encryption",
-            "Validate transmission security",
-          ],
-          expected: "All PHI data properly encrypted using AES-256 standards",
-        },
-        {
-          id: "HTC003",
-          title: "Medical Device Integration Error Handling",
-          description:
-            "Test system resilience when medical devices disconnect or malfunction",
-          priority: "High",
-          type: "Integration",
-          steps: [
-            "Connect medical monitoring device",
-            "Simulate device disconnection",
-            "Verify error handling protocols",
-            "Test data recovery procedures",
-          ],
-          expected:
-            "System gracefully handles device errors with proper alerts and data preservation",
-        },
-        {
-          id: "HTC004",
-          title: "Audit Trail Compliance Verification",
-          description:
-            "Validate comprehensive audit logging for HIPAA compliance requirements",
-          priority: "High",
-          type: "Compliance",
-          steps: [
-            "Perform various user actions",
-            "Access audit trail logs",
-            "Verify log completeness",
-            "Test log tamper protection",
-          ],
-          expected:
-            "Complete audit trail captured with tamper-proof logging mechanisms",
-        },
-      ];
-
-      setGeneratedTestCases(mockTestCases);
+      setGeneratedTestCases(response.testCases);
+      onTestCasesGenerated(response.testCases);
     } catch (error) {
       console.error("Test case generation error:", error);
     } finally {

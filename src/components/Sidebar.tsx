@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   ArrowLeft,
@@ -10,7 +10,9 @@ import {
   Activity,
   Settings,
 } from "lucide-react";
-import type { Chat } from "@/lib/types";
+import type { Chat, Session } from "@/lib/types";
+import { getActiveSessions } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 interface SidebarProps {
   sessionId: string;
@@ -18,6 +20,19 @@ interface SidebarProps {
   currentChatId?: string | null;
   onChatSelect?: (chatId: string) => void;
   onNewChat?: () => void;
+  sessionDetails?: {
+    session_id: string;
+    user_id: string;
+    project_name: string;
+    user_prompt: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    requirements_count: number;
+    edited_requirements_count: number;
+    test_cases_count: number;
+    requirement_test_links_count: number;
+  };
 }
 
 export default function Sidebar({
@@ -26,8 +41,24 @@ export default function Sidebar({
   currentChatId,
   onChatSelect,
   onNewChat,
+  sessionDetails,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<Session[]>([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchActiveSessions = async () => {
+      try {
+        const { sessions } = await getActiveSessions();
+        setActiveSessions(sessions);
+      } catch (error) {
+        console.error("Failed to fetch active sessions:", error);
+      }
+    };
+
+    fetchActiveSessions();
+  }, []);
 
   const getChatIcon = (title: string) => {
     if (
@@ -116,6 +147,20 @@ export default function Sidebar({
         </button>
       </div>
 
+      {/* Session Details */}
+      {sessionDetails && !collapsed && (
+        <div className="relative z-10 px-4 py-2 border-b border-slate-700/40">
+          <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
+            Session Details
+          </h3>
+          <div className="text-sm text-slate-300 space-y-1">
+            <div>Status: {sessionDetails.status}</div>
+            <div>Requirements: {sessionDetails.requirements_count}</div>
+            <div>Test Cases: {sessionDetails.test_cases_count}</div>
+          </div>
+        </div>
+      )}
+
       {/* Chat List Header */}
       {!collapsed && (
         <div className="relative z-10 px-4 py-2">
@@ -124,7 +169,7 @@ export default function Sidebar({
               Active Chats
             </h3>
             <span className="text-xs bg-slate-800/60 text-slate-300 px-1.5 py-0.5 rounded">
-              {chats.length}
+              {activeSessions.length}
             </span>
           </div>
         </div>
@@ -134,39 +179,36 @@ export default function Sidebar({
       <div className="relative z-10 flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
           <div className="px-2 pb-3 space-y-1">
-            {chats.length === 0 ? (
+            {activeSessions.length === 0 ? (
               <div
                 className={`text-center py-6 ${collapsed ? "px-1" : "px-3"}`}
               >
                 {!collapsed ? (
                   <div className="text-slate-400">
                     <MessageSquare className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">No chats yet</p>
-                    <p className="text-xs mt-1 opacity-75">
-                      Click "New Analysis"
-                    </p>
+                    <p className="text-xs">No active sessions</p>
                   </div>
                 ) : (
                   <MessageSquare className="w-5 h-5 text-slate-400 opacity-50 mx-auto" />
                 )}
               </div>
             ) : (
-              chats.map((chat) => {
-                const ChatIcon = getChatIcon(chat.title);
-                const status = getChatStatus(chat.updated_at);
-                const isActive = currentChatId === chat.id;
+              activeSessions.map((session) => {
+                const ChatIcon = getChatIcon(session.project_name);
+                const status = getChatStatus(session.updated_at ? session.updated_at : "");
+                const isActive = false;
 
                 return (
                   <button
-                    key={chat.id}
-                    onClick={() => onChatSelect?.(chat.id)}
+                    key={session.id}
+                    onClick={() => router.push(`/sessions/${session.id}`)}
                     className={`group w-full flex items-center gap-2.5 text-left p-2.5 rounded-lg transition-all duration-200 ${
                       isActive
                         ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-md"
                         : "hover:bg-slate-800/40 border border-transparent hover:border-slate-600/30"
                     } ${collapsed ? "justify-center px-2" : ""}`}
                   >
-                    {/* Chat Icon */}
+                    {/* Session Icon */}
                     <div
                       className={`relative flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
                         isActive
@@ -194,7 +236,7 @@ export default function Sidebar({
                                 : "text-slate-200 group-hover:text-white"
                             }`}
                           >
-                            {chat.title}
+                            {session.project_name}
                           </h4>
                           <span
                             className={`text-xs ${
@@ -212,7 +254,7 @@ export default function Sidebar({
                               : "text-slate-400 group-hover:text-slate-300"
                           }`}
                         >
-                          {chat.last_message || "No messages"}
+                          {session.status}
                         </p>
 
                         <div className="flex items-center justify-between mt-1">
@@ -221,7 +263,7 @@ export default function Sidebar({
                               isActive ? "text-blue-300" : "text-slate-500"
                             }`}
                           >
-                            {new Date(chat.updated_at).toLocaleDateString(
+                            {new Date(session.updated_at ? session.updated_at : "").toLocaleDateString(
                               "en-US",
                               {
                                 month: "short",

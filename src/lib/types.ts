@@ -113,3 +113,20 @@ export interface UploadDocumentResponse {
   };
   message: string;
 }
+
+export interface UserSessions {
+  user_id: string;
+  sessions: {
+    session_id: string;
+    user_id: string;
+    project_name: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    requirements_count: number;
+    edited_requirements_count: number;
+    test_cases_count: number;
+    requirement_test_links_count: number;
+  }[];
+  total_count: number;
+}

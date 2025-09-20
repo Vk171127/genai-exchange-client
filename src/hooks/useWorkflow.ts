@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getChats, sendMessage, fetchRAGContext } from "@/lib/api";
+import { getChats, sendMessage, fetchRAGContext, getSessionDetails, editRequirements } from "@/lib/api";
 import type { Message, Chat } from "@/lib/types";
 
 type WorkflowStep =
@@ -20,6 +20,28 @@ export function useWorkflow(sessionId: string) {
   const [agentAnalysis, setAgentAnalysis] = useState("");
 
   const queryClient = useQueryClient();
+
+  // Fetch session details
+  const { data: sessionDetails, isLoading: sessionDetailsLoading } = useQuery({
+    queryKey: ["sessionDetails", sessionId],
+    queryFn: () => getSessionDetails(sessionId),
+    enabled: !!sessionId,
+  });
+
+  React.useEffect(() => {
+    if (sessionDetails?.status === "rag_context_loaded") {
+      setCurrentStep("analyze");
+    }
+    if (sessionDetails?.status === "requirements_analyzed") {
+      setCurrentStep("edit-analysis");
+    }
+    if (sessionDetails?.status === "test_cases_generated") {
+      setCurrentStep("complete");
+    }
+    if (sessionDetails?.status === "created") {
+      setCurrentStep("no-chat");
+    }
+  }, [sessionDetails, setCurrentStep]);
 
   // Fetch chats for session
   const { data: chatsData, isLoading: chatsLoading } = useQuery({
@@ -97,6 +119,24 @@ export function useWorkflow(sessionId: string) {
     },
   });
 
+  // Edit analysis mutation
+  const editAnalysisMutation = useMutation({
+    mutationFn: ({ sessionId, requirements }: { sessionId: string; requirements: string[] }) =>
+      editRequirements(sessionId, requirements),
+    onSuccess: (data) => {
+      setCurrentStep("generate-testcases");
+      // Update session details in cache
+      queryClient.setQueryData(["sessionDetails", sessionId], (old: any) => ({
+        ...old,
+        status: "requirements_edited",
+      }));
+    },
+  });
+
+  const editAnalysis = (requirements: string[]) => {
+    editAnalysisMutation.mutate({ sessionId: sessionId, requirements: requirements });
+  };
+
   return {
     // State
     currentChatId,
@@ -120,5 +160,9 @@ export function useWorkflow(sessionId: string) {
 
     analyzeData: analyzeDataMutation.mutate,
     analyzeDataLoading: analyzeDataMutation.isPending,
+
+    // Session Details
+    sessionDetails: sessionDetails,
+    sessionDetailsLoading,
   };
 }

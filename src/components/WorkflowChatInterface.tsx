@@ -16,6 +16,7 @@ import FetchContextModal from "./FetchContextModal";
 import AnalysisEditor from "./AnalysisEditor";
 import TestCaseModal from "./TestCaseModal";
 import { useWorkflow } from "@/hooks/useWorkflow";
+import { analyzeRequirements } from "@/lib/api";
 
 interface WorkflowChatInterfaceProps {
   sessionId: string;
@@ -47,6 +48,8 @@ export default function WorkflowChatInterface({
     fetchContextLoading,
     analyzeData,
     analyzeDataLoading,
+    sessionDetails,
+    sessionDetailsLoading,
   } = useWorkflow(sessionId);
 
   const handleNewChat = () => setShowFetchModal(true);
@@ -55,9 +58,31 @@ export default function WorkflowChatInterface({
     setShowFetchModal(false);
   };
   const handleStartAnalysis = () => setCurrentStep("analyze");
-  const handleAnalyzeData = () => {
+
+  React.useEffect(() => {
+    if (sessionDetails && sessionDetails.status === "rag-context_loaded") {
+      setCurrentStep("analyze");
+    }
+  }, [sessionDetails, setCurrentStep]);
+  const handleAnalyzeData = async () => {
     if (!userPrompt.trim() || !currentChatId) return;
-    analyzeData({ chatId: currentChatId, text: userPrompt });
+    try {
+      const response = await analyzeRequirements(sessionId, userPrompt);
+      setAgentAnalysis(response.analysis);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `analysis-${Date.now()}`,
+          role: "agent" as const,
+          text: response.analysis,
+          created_at: new Date().toISOString(),
+          chat_id: currentChatId!,
+        },
+      ]);
+      setCurrentStep("edit-analysis");
+    } catch (error) {
+      console.error("Analysis error:", error);
+    }
   };
   const handleAnalysisEdited = (editedAnalysis: string) => {
     setAgentAnalysis(editedAnalysis);
@@ -131,6 +156,14 @@ export default function WorkflowChatInterface({
     ];
     const currentIndex = stepOrder.indexOf(currentStep);
     const stepIndex = stepOrder.indexOf(stepId);
+
+    const isRagContextLoaded =
+      sessionDetails && sessionDetails.status === "rag-context_loaded";
+
+    if (isRagContextLoaded && stepId === "no-chat") {
+      return true;
+    }
+
     return (
       stepIndex < currentIndex ||
       (stepId === "generate-testcases" && currentStep === "complete")
@@ -169,6 +202,7 @@ export default function WorkflowChatInterface({
           currentChatId={currentChatId}
           onChatSelect={setCurrentChatId}
           onNewChat={handleNewChat}
+          sessionDetails={sessionDetails}
         />
 
         <div className="flex-1 flex flex-col">

@@ -1,10 +1,9 @@
 // src/lib/api.ts - Complete API integration with real backend
-import type { Session, Chat, Message } from "./types";
+import type { Session, Chat, Message, UserSessions } from "./types";
+import { BACKEND_URL } from "./constants";
 
 // API Configuration
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://testgen-backend-195472357560.us-central1.run.app/api/v2";
+const API_BASE_URL = BACKEND_URL + "/api/v2";
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 
 // User ID - In production, get this from auth context
@@ -55,14 +54,13 @@ export async function uploadDocument(
   formData.append("document_type", documentType);
   formData.append("enable_rag", enableRag.toString());
 
-  if (metadata) {
-    formData.append("metadata", JSON.stringify(metadata));
-  }
-
   const response = await fetch(
     `${API_BASE_URL}/data-ingestion/upload-with-rag`,
     {
       method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
       body: formData,
     }
   );
@@ -75,9 +73,6 @@ export async function uploadDocument(
 // ============================================================================
 
 export async function getUserSessions(): Promise<{ sessions: Session[] }> {
-  // TODO: Backend needs to implement GET /sessions endpoint to list user sessions
-  // For now using mock data since only session creation exists in backend
-
   if (USE_MOCK_DATA) {
     await mockDelay(800);
     return {
@@ -107,24 +102,41 @@ export async function getUserSessions(): Promise<{ sessions: Session[] }> {
     };
   }
 
-  // Mock fallback until backend provides session list
-  await mockDelay(500);
-  return {
-    sessions: [
-      {
-        id: "session-emr-001",
-        project_name: "EMR Patient Portal Testing",
-        status: "active",
-        created_at: new Date().toISOString(),
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions/sessions`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
       },
+    });
+
+    const result = await handleApiResponse<
       {
-        id: "session-hipaa-002",
-        project_name: "HIPAA Compliance Validation",
-        status: "draft",
-        created_at: new Date().toISOString(),
-      },
-    ],
-  };
+        session_id: string;
+        user_id: string;
+        project_name: string;
+        status: string;
+        message: string;
+        database_saved: boolean;
+      }[]
+    >(response);
+
+    const sessions: Session[] = result.map((sessionData) => ({
+      id: sessionData.session_id,
+      project_name: sessionData.project_name,
+      status:
+        sessionData.status === "created"
+          ? "draft"
+          : (sessionData.status as Session["status"]),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    return { sessions };
+  } catch (error) {
+    console.error("Get user sessions API error:", error);
+    throw error;
+  }
 }
 
 export async function createSession(data: {
@@ -186,6 +198,7 @@ export async function createSession(data: {
 // ============================================================================
 
 export async function getChats(sessionId: string): Promise<{ chats: Chat[] }> {
+  // TODO: Implement backend API call for fetching chats
   await mockDelay(600);
 
   const mockChats = [
@@ -218,6 +231,7 @@ export async function getChats(sessionId: string): Promise<{ chats: Chat[] }> {
 export async function getMessages(
   chatId: string
 ): Promise<{ messages: Message[] }> {
+  // TODO: Implement backend API call for fetching messages
   await mockDelay(400);
 
   return {
@@ -329,6 +343,41 @@ export async function analyzeRequirements(
     };
   } catch (error) {
     console.error("Analyze requirements API error:", error);
+    throw error;
+  }
+}
+
+export async function editRequirements(
+  sessionId: string,
+  requirements: string[]
+): Promise<{ status: string; message: string }> {
+  if (USE_MOCK_DATA) {
+    await mockDelay(2000);
+    return {
+      status: "success",
+      message: "Requirements updated successfully",
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/requirements/${sessionId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requirements: requirements,
+      }),
+    });
+
+    const result = await handleApiResponse<any>(response);
+
+    return {
+      status: "success",
+      message: result.message,
+    };
+  } catch (error) {
+    console.error("Edit requirements API error:", error);
     throw error;
   }
 }
@@ -468,6 +517,68 @@ export async function sendMessage(
 // UPDATE ANALYSIS (Dummy API for now)
 // ============================================================================
 
+export async function getSessionDetails(sessionId: string): Promise<{
+  session_id: string;
+  user_id: string;
+  project_name: string;
+  user_prompt: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  requirements_count: number;
+  edited_requirements_count: number;
+  test_cases_count: number;
+  requirement_test_links_count: number;
+}> {
+  if (USE_MOCK_DATA) {
+    await mockDelay(800);
+    return {
+      session_id: sessionId,
+      user_id: "user123",
+      project_name: "Authentication System Testing",
+      user_prompt: "Session creation",
+      status: "test_cases_generated",
+      created_at: "2025-09-20T17:33:06.404379",
+      updated_at: "2025-09-20T17:36:54.719095",
+      requirements_count: 52,
+      edited_requirements_count: 0,
+      test_cases_count: 23,
+      requirement_test_links_count: 0,
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sessions/sessions/${sessionId}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const result = await handleApiResponse<any>(response);
+
+    return {
+      session_id: result.session_id,
+      user_id: result.user_id,
+      project_name: result.project_name,
+      user_prompt: result.user_prompt,
+      status: result.status,
+      created_at: result.created_at,
+      updated_at: result.updated_at,
+      requirements_count: result.requirements_count,
+      edited_requirements_count: result.edited_requirements_count,
+      test_cases_count: result.test_cases_count,
+      requirement_test_links_count: result.requirement_test_links_count,
+    };
+  } catch (error) {
+    console.error("Get session details API error:", error);
+    throw error;
+  }
+}
+
 export async function updateAnalysis(
   sessionId: string,
   updatedAnalysis: string
@@ -489,6 +600,67 @@ export async function updateAnalysis(
 export function setMockMode(useMock: boolean) {
   if (typeof window !== "undefined") {
     localStorage.setItem("USE_MOCK_API", useMock.toString());
+  }
+}
+
+export async function getActiveSessions(): Promise<{ sessions: Session[] }> {
+  // TODO: Replace CURRENT_USER_ID with the actual user ID from the authentication context
+  const userId = CURRENT_USER_ID;
+
+  if (USE_MOCK_DATA) {
+    await mockDelay(800);
+    return {
+      sessions: [
+        {
+          id: "session-emr-001",
+          project_name: "EMR Patient Portal Testing",
+          status: "active",
+          created_at: "2024-01-15T10:30:00Z",
+          updated_at: "2024-01-20T14:22:00Z",
+        },
+        {
+          id: "session-hipaa-002",
+          project_name: "HIPAA Compliance Validation",
+          status: "completed",
+          created_at: "2024-01-10T09:15:00Z",
+          updated_at: "2024-01-18T16:45:00Z",
+        },
+        {
+          id: "session-telehealth-003",
+          project_name: "Telehealth Platform Integration",
+          status: "draft",
+          created_at: "2024-01-22T11:00:00Z",
+          updated_at: "2024-01-22T11:00:00Z",
+        },
+      ],
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sessions/users/${userId}/sessions`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const result = await handleApiResponse<UserSessions>(response);
+
+    const sessions: Session[] = result.sessions.map((sessionData) => ({
+      id: sessionData.session_id,
+      project_name: sessionData.project_name,
+      status: sessionData.status === "created" ? "draft" : sessionData.status as Session["status"],
+      created_at: sessionData.created_at,
+      updated_at: sessionData.updated_at,
+    }));
+
+    return { sessions };
+  } catch (error) {
+    console.error("Get active sessions API error:", error);
+    throw error;
   }
 }
 
