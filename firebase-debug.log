@@ -1,0 +1,64 @@
+[debug] [2025-09-20T19:54:22.933Z] ----------------------------------------------------------------------
+[debug] [2025-09-20T19:54:22.935Z] Command:       /opt/homebrew/Cellar/node/23.11.0/bin/node /Users/mv/.npm-global/bin/firebase init
+[debug] [2025-09-20T19:54:22.935Z] CLI Version:   14.17.0
+[debug] [2025-09-20T19:54:22.935Z] Platform:      darwin
+[debug] [2025-09-20T19:54:22.935Z] Node Version:  v23.11.0
+[debug] [2025-09-20T19:54:22.935Z] Time:          Sun Sep 21 2025 01:24:22 GMT+0530 (India Standard Time)
+[debug] [2025-09-20T19:54:22.935Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-09-20T19:54:22.941Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-20T19:54:22.941Z] > authorizing via signed-in user (seyon67.genai.exchange@gmail.com)
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /Users/mv/Documents/genai-exchange/genai-exchange-client
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] but for now we'll just set up a default project.
+[info] 
+[info] i  If you want to create a project in a Google Cloud organization or folder, please use "firebase projects:create" instead, and return to this command when you've created the project. 
+[debug] [2025-09-20T19:55:41.566Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:41.567Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:41.571Z] >>> [apiv2][query] POST https://firebase.googleapis.com/v1/projects:checkProjectId [none]
+[debug] [2025-09-20T19:55:41.572Z] >>> [apiv2][body] POST https://firebase.googleapis.com/v1/projects:checkProjectId {"proposedId":"testgen-client-seyon"}
+[debug] [2025-09-20T19:55:42.004Z] <<< [apiv2][status] POST https://firebase.googleapis.com/v1/projects:checkProjectId 200
+[debug] [2025-09-20T19:55:42.004Z] <<< [apiv2][body] POST https://firebase.googleapis.com/v1/projects:checkProjectId {"projectIdStatus":"PROJECT_ID_AVAILABLE","suggestedProjectId":"testgen-client-seyon"}
+[debug] [2025-09-20T19:55:44.153Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:44.153Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:44.153Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects [none]
+[debug] [2025-09-20T19:55:44.153Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"projectId":"testgen-client-seyon","name":"testgen-client-seyon"}
+[debug] [2025-09-20T19:55:45.575Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects 200
+[debug] [2025-09-20T19:55:45.576Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects {"name":"operations/create_project.global.4998024106091367107"}
+[debug] [2025-09-20T19:55:45.576Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:45.576Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:45.577Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 [none]
+[debug] [2025-09-20T19:55:46.823Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 200
+[debug] [2025-09-20T19:55:46.823Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 {"name":"operations/create_project.global.4998024106091367107"}
+[debug] [2025-09-20T19:55:47.325Z] [Project Creation Poller] Retrying task index 0
+[debug] [2025-09-20T19:55:47.326Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:47.326Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:47.326Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 [none]
+[debug] [2025-09-20T19:55:47.611Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 200
+[debug] [2025-09-20T19:55:47.612Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/operations/create_project.global.4998024106091367107 {"name":"operations/create_project.global.4998024106091367107","metadata":{"@type":"type.googleapis.com/google.cloudresourcemanager.v1.ProjectCreationStatus","gettable":true,"ready":true},"done":true,"response":{"@type":"type.googleapis.com/google.cloudresourcemanager.v1.Project","projectNumber":"467536535374","projectId":"testgen-client-seyon","lifecycleState":"ACTIVE","name":"testgen-client-seyon","createTime":"2025-09-20T19:55:46.558156Z"}}
+[debug] [2025-09-20T19:55:47.613Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:47.613Z] Checked if tokens are valid: true, expires at: 1758400981290
+[debug] [2025-09-20T19:55:47.613Z] >>> [apiv2][query] POST https://firebase.googleapis.com/v1beta1/projects/testgen-client-seyon:addFirebase [none]
+[debug] [2025-09-20T19:55:49.116Z] <<< [apiv2][status] POST https://firebase.googleapis.com/v1beta1/projects/testgen-client-seyon:addFirebase 403
+[debug] [2025-09-20T19:55:49.116Z] <<< [apiv2][body] POST https://firebase.googleapis.com/v1beta1/projects/testgen-client-seyon:addFirebase {"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}
+[debug] [2025-09-20T19:55:49.117Z] Request to https://firebase.googleapis.com/v1beta1/projects/testgen-client-seyon:addFirebase had HTTP Error: 403, The caller does not have permission
+[debug] [2025-09-20T19:55:49.206Z] FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/testgen-client-seyon:addFirebase had HTTP Error: 403, The caller does not have permission
+    at responseToError (/Users/mv/.npm-global/lib/node_modules/firebase-tools/lib/responseToError.js:52:12)
+    at RetryOperation._fn (/Users/mv/.npm-global/lib/node_modules/firebase-tools/lib/apiv2.js:312:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[error] 
+[error] Error: Failed to add Firebase to Google Cloud Platform project. See firebase-debug.log for more info.

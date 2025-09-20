@@ -33,6 +33,7 @@ interface TestCaseModalProps {
   onClose: () => void;
   onTestCasesGenerated: (testCases: TestCase[]) => void;
   analysis: string;
+  sessionId: string;
 }
 
 export default function TestCaseModal({
@@ -40,12 +41,11 @@ export default function TestCaseModal({
   onClose,
   onTestCasesGenerated,
   analysis,
+  sessionId
 }: TestCaseModalProps) {
   const [generating, setGenerating] = useState(false);
   const [generatedTestCases, setGeneratedTestCases] = useState<TestCase[]>([]);
 
-  const searchParams = useSearchParams();
-  const sessionId = searchParams?.get("sessionId");
   const handleGenerate = async () => {
     setGenerating(true);
 
@@ -53,7 +53,7 @@ export default function TestCaseModal({
       // TODO: need to get prompt from the chat messages
       const prompt =
         "Generate comprehensive test cases for the refined analysis.";
-      const response = await generateTestCases(sessionId!, prompt);
+      const response = await generateTestCases(sessionId, prompt);
 
       setGeneratedTestCases(response.testCases);
       onTestCasesGenerated(response.testCases);

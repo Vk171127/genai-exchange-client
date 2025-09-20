@@ -64,22 +64,10 @@ export default function WorkflowChatInterface({
       setCurrentStep("analyze");
     }
   }, [sessionDetails, setCurrentStep]);
-  const handleAnalyzeData = async () => {
+  const handleAnalyzeData = () => {
     if (!userPrompt.trim() || !currentChatId) return;
     try {
-      const response = await analyzeRequirements(sessionId, userPrompt);
-      setAgentAnalysis(response.analysis);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `analysis-${Date.now()}`,
-          role: "agent" as const,
-          text: response.analysis,
-          created_at: new Date().toISOString(),
-          chat_id: currentChatId!,
-        },
-      ]);
-      setCurrentStep("edit-analysis");
+      analyzeData({ chatId: currentChatId, text: userPrompt });
     } catch (error) {
       console.error("Analysis error:", error);
     }
@@ -397,6 +385,7 @@ export default function WorkflowChatInterface({
         onClose={() => setShowTestCaseModal(false)}
         onTestCasesGenerated={handleTestCasesGenerated}
         analysis={agentAnalysis}
+        sessionId={sessionId}
       />
     </>
   );

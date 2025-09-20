@@ -1,7 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getChats, sendMessage, fetchRAGContext, getSessionDetails, editRequirements } from "@/lib/api";
+import {
+  getChats,
+  sendMessage,
+  fetchRAGContext,
+  getSessionDetails,
+  editRequirements,
+  analyzeRequirements,
+} from "@/lib/api";
 import type { Message, Chat } from "@/lib/types";
 
 type WorkflowStep =
@@ -29,17 +36,19 @@ export function useWorkflow(sessionId: string) {
   });
 
   React.useEffect(() => {
-    if (sessionDetails?.status === "rag_context_loaded") {
-      setCurrentStep("analyze");
-    }
-    if (sessionDetails?.status === "requirements_analyzed") {
-      setCurrentStep("edit-analysis");
-    }
-    if (sessionDetails?.status === "test_cases_generated") {
-      setCurrentStep("complete");
-    }
-    if (sessionDetails?.status === "created") {
-      setCurrentStep("no-chat");
+    if (sessionDetails) {
+      if (sessionDetails.status === "rag_context_loaded") {
+        setCurrentStep("analyze");
+      }
+      if (sessionDetails.status === "requirements_analyzed") {
+        setCurrentStep("edit-analysis");
+      }
+      if (sessionDetails.status === "test_cases_generated") {
+        setCurrentStep("complete");
+      }
+      if (sessionDetails.status === "created") {
+        setCurrentStep("no-chat");
+      }
     }
   }, [sessionDetails, setCurrentStep]);
 
@@ -85,10 +94,10 @@ export function useWorkflow(sessionId: string) {
     },
   });
 
-  // Send message mutation
+  // Analyze data mutation
   const analyzeDataMutation = useMutation({
     mutationFn: ({ chatId, text }: { chatId: string; text: string }) =>
-      sendMessage(chatId, text),
+      analyzeRequirements(sessionId, text),
     onMutate: ({ text }) => {
       // Optimistically add user message
       const userMessage: Message = {
@@ -101,15 +110,13 @@ export function useWorkflow(sessionId: string) {
       setMessages((prev) => [...prev, userMessage]);
     },
     onSuccess: (data) => {
-      // Generate analysis
-      const analysisText = `Analysis of "${userPrompt}":\n\n1. Healthcare Compliance Requirements:\n   - HIPAA privacy and security compliance\n   - Patient data encryption standards\n   - Audit logging requirements\n\n2. Test Case Categories:\n   - Authentication and authorization tests\n   - Data validation and sanitization\n   - Error handling and edge cases\n   - Integration with medical devices\n\n3. Risk Assessment:\n   - High: Patient data exposure\n   - Medium: System downtime impact\n   - Low: UI/UX inconsistencies`;
-
-      setAgentAnalysis(analysisText);
+      // Set agent analysis
+      setAgentAnalysis(data.analysis);
 
       const agentMessage: Message = {
         id: `analysis-${Date.now()}`,
         role: "agent",
-        text: analysisText,
+        text: data.analysis,
         created_at: new Date().toISOString(),
         chat_id: currentChatId!,
       };
@@ -121,8 +128,13 @@ export function useWorkflow(sessionId: string) {
 
   // Edit analysis mutation
   const editAnalysisMutation = useMutation({
-    mutationFn: ({ sessionId, requirements }: { sessionId: string; requirements: string[] }) =>
-      editRequirements(sessionId, requirements),
+    mutationFn: ({
+      sessionId,
+      requirements,
+    }: {
+      sessionId: string;
+      requirements: string[];
+    }) => editRequirements(sessionId, requirements),
     onSuccess: (data) => {
       setCurrentStep("generate-testcases");
       // Update session details in cache
@@ -134,7 +146,10 @@ export function useWorkflow(sessionId: string) {
   });
 
   const editAnalysis = (requirements: string[]) => {
-    editAnalysisMutation.mutate({ sessionId: sessionId, requirements: requirements });
+    editAnalysisMutation.mutate({
+      sessionId: sessionId,
+      requirements: requirements,
+    });
   };
 
   return {

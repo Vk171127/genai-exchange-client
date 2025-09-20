@@ -201,7 +201,10 @@ export default function Sidebar({
                 return (
                   <button
                     key={session.id}
-                    onClick={() => router.push(`/sessions/${session.id}`)}
+                    onClick={() => {
+                  onChatSelect?.(session.id);
+                  router.push(`/sessions/${session.id}`);
+                }}
                     className={`group w-full flex items-center gap-2.5 text-left p-2.5 rounded-lg transition-all duration-200 ${
                       isActive
                         ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-md"

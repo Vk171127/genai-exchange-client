@@ -652,7 +652,10 @@ export async function getActiveSessions(): Promise<{ sessions: Session[] }> {
     const sessions: Session[] = result.sessions.map((sessionData) => ({
       id: sessionData.session_id,
       project_name: sessionData.project_name,
-      status: sessionData.status === "created" ? "draft" : sessionData.status as Session["status"],
+      status:
+        sessionData.status === "created"
+          ? "draft"
+          : (sessionData.status as Session["status"]),
       created_at: sessionData.created_at,
       updated_at: sessionData.updated_at,
     }));
