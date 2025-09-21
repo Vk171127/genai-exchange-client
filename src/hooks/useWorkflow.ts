@@ -123,6 +123,7 @@ export function useWorkflow(sessionId: string) {
 
       setMessages((prev) => [...prev, agentMessage]);
       setCurrentStep("edit-analysis");
+      queryClient.refetchQueries({ queryKey: ["sessionDetails", sessionId] });
     },
   });
 

@@ -97,6 +97,7 @@ export default function WorkflowChatInterface({
             .join("\n");
           setSessionRequirements(filteredRequirements);
           console.log("sessionData:", response);
+          console.log("response.requirements:", response.requirements);
           console.log("sessionRequirements:", filteredRequirements);
         }
       } catch (error) {

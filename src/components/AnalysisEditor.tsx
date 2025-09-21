@@ -1,8 +1,8 @@
 // FILE 3: src/components/AnalysisEditor.tsx (ENHANCED UI)
 "use client";
-import React, { useState, useEffect } from "react";
-import { Save, RotateCcw, Edit3, CheckCircle, AlertCircle } from "lucide-react";
 import { editRequirements } from "@/lib/api";
+import { AlertCircle, CheckCircle, Edit3, RotateCcw, Save } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface AnalysisEditorProps {
   analysis: string;
@@ -21,17 +21,17 @@ export default function AnalysisEditor({
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    setEditedAnalysis(requirements);
-  }, [requirements]);
+    setEditedAnalysis(analysis);
+  }, [analysis]);
 
   const handleChange = (value: string) => {
     setEditedAnalysis(value);
-    setHasChanges(value !== analysis);
+    setHasChanges(value !== analysis && value !== requirements);
   };
 
   const handleSave = async () => {
     try {
-      await editRequirements(sessionId, [editedAnalysis]); // Call the editRequirements API
+      await editRequirements(sessionId, [editedAnalysis]);
       onSave(editedAnalysis);
       setHasChanges(false);
     } catch (error) {
@@ -72,7 +72,8 @@ export default function AnalysisEditor({
       {/* Editor */}
       <div className="space-y-4">
         <textarea
-          value={editedAnalysis}
+          value={`${requirements}\n\n${editedAnalysis}`}
+          readOnly
           onChange={(e) => handleChange(e.target.value)}
           className="w-full p-6 bg-slate-800/50 backdrop-blur-sm border border-slate-700/30 rounded-2xl min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-white font-mono text-sm leading-relaxed transition-all duration-200 resize-none"
           placeholder="Enter your healthcare analysis here..."
