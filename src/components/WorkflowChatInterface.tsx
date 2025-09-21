@@ -32,7 +32,7 @@ interface TestCase {
   status: string;
   created_at: string;
   updated_at: string;
-  linked_requirements: string;
+  linked_requirements: string[];
 }
 
 interface WorkflowChatInterfaceProps {
