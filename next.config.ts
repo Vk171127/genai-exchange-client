@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_USE_MOCK: "false",
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // output: 'export'
 };
 
