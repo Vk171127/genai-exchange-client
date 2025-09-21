@@ -430,63 +430,38 @@ export async function generateTestCases(
 function parseTestCasesFromResponse(rawResponse: string): any[] {
   const testCases: any[] = [];
 
-  // Split by test_id to get individual test cases
-  const testBlocks = rawResponse
-    .split(/test_id:\s*/)
-    .filter((block) => block.trim());
+  // Split the raw response into individual test cases
+  const testCaseBlocks = rawResponse.split("---\n\n").filter(block => block.includes("test_id:"));
 
-  testBlocks.forEach((block) => {
+  testCaseBlocks.forEach(block => {
     const testCase: any = {};
     const lines = block.split("\n");
 
-    // More robust parsing
-    lines.forEach((line) => {
-      const colonIndex = line.indexOf(":");
-      if (colonIndex === -1) return;
-
-      const key = line.substring(0, colonIndex).trim();
-      const value = line.substring(colonIndex + 1).trim();
-
-      switch (key) {
-        case "test_id":
-        case "":
-          if (value) testCase.id = value;
-          break;
-        case "priority":
-          testCase.priority = value.charAt(0).toUpperCase() + value.slice(1);
-          break;
-        case "summary":
-          testCase.title = value;
-          testCase.description = value;
-          break;
-        case "expected_result":
-          testCase.expectedResults = value;
-          break;
-        case "requirement_traceability":
-          testCase.requirementTraceability = value;
-          break;
+    lines.forEach(line => {
+      if (line.startsWith("**test_id:**")) {
+        testCase.name = line.split(":")[1].trim();
+      } else if (line.startsWith("**priority:**")) {
+        testCase.priority = line.split(":")[1].trim();
+      } else if (line.startsWith("**summary:**")) {
+        testCase.description = line.split(":")[1].trim();
+      } else if (line.startsWith("**test_steps:**")) {
+        const steps = [];
+        let i = lines.indexOf(line) + 1;
+        while (i < lines.length && !lines[i].startsWith("**")) {
+          if (lines[i].trim() !== "") {
+            steps.push(lines[i].replace(/^\d+\.\s*/, "").trim());
+          }
+          i++;
+        }
+        testCase.steps = steps;
+      } else if (line.startsWith("**expected_result:**")) {
+        testCase.expectedResults = line.split(":")[1].trim();
       }
     });
 
-    // Extract test steps (numbered list)
-    const stepsMatch = block.match(/test_steps:\s*\n((?:\d+\..+\n?)+)/);
-    if (stepsMatch) {
-      testCase.steps = stepsMatch[1]
-        .split("\n")
-        .filter((step) => step.trim())
-        .map((step) => step.replace(/^\d+\.\s*/, "").trim());
-    }
+    testCase.type = "edge"; // Default type
 
-    // Set defaults
-    testCase.type = testCase.title?.toLowerCase().includes("security")
-      ? "Security"
-      : testCase.title?.toLowerCase().includes("functional")
-      ? "Functional"
-      : "Integration";
-    testCase.category = "Healthcare Testing";
-    testCase.hipaaCompliance = true;
-
-    if (testCase.id && testCase.title) {
+    if (testCase.name && testCase.description && testCase.steps && testCase.expectedResults && testCase.priority) {
       testCases.push(testCase);
     }
   });

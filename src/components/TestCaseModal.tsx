@@ -41,7 +41,7 @@ export default function TestCaseModal({
   onClose,
   onTestCasesGenerated,
   analysis,
-  sessionId
+  sessionId,
 }: TestCaseModalProps) {
   const [generating, setGenerating] = useState(false);
   const [generatedTestCases, setGeneratedTestCases] = useState<TestCase[]>([]);
@@ -57,6 +57,7 @@ export default function TestCaseModal({
 
       setGeneratedTestCases(response.testCases);
       onTestCasesGenerated(response.testCases);
+      onClose();
     } catch (error) {
       console.error("Test case generation error:", error);
     } finally {
@@ -312,7 +313,6 @@ export default function TestCaseModal({
                 onClick={() => {
                   onTestCasesGenerated(generatedTestCases);
                   onClose();
-                  setGeneratedTestCases([]);
                 }}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 font-semibold"
               >

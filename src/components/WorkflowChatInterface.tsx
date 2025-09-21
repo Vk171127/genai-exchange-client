@@ -28,6 +28,7 @@ export default function WorkflowChatInterface({
   const [showFetchModal, setShowFetchModal] = useState(false);
   const [showTestCaseModal, setShowTestCaseModal] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState("");
+  const [generatedTestCases, setGeneratedTestCases] = useState<any[]>([]);
 
   const router = useRouter();
 
@@ -93,6 +94,7 @@ export default function WorkflowChatInterface({
       chat_id: currentChatId!,
     };
     setMessages((prev) => [...prev, testCaseMessage]);
+    setGeneratedTestCases(testCases);
     setCurrentStep("complete");
   };
 
@@ -335,6 +337,7 @@ export default function WorkflowChatInterface({
                 <AnalysisEditor
                   analysis={agentAnalysis}
                   onSave={handleAnalysisEdited}
+                  sessionId={sessionId}
                 />
               </div>
             ) : currentStep === "generate-testcases" ? (
@@ -358,14 +361,34 @@ export default function WorkflowChatInterface({
                 </button>
               </div>
             ) : currentStep === "complete" ? (
-              <div className="p-6 text-center">
+              <div className="p-6">
                 <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
                 <h3 className="text-green-300 text-lg mb-2">
                   Workflow Complete!
                 </h3>
-                <p className="text-slate-400">
+                <p className="text-slate-400 mb-4">
                   Healthcare test cases are ready for implementation.
                 </p>
+                {generatedTestCases.map((testCase, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-800/50 rounded-lg p-4 mb-4"
+                  >
+                    <h4 className="text-white font-semibold">
+                      {testCase.name}
+                    </h4>
+                    <p className="text-slate-400">{testCase.description}</p>
+                    <ul className="list-disc list-inside text-slate-300">
+                      {testCase.steps.map((step, stepIndex) => (
+                        <li key={stepIndex}>{step}</li>
+                      ))}
+                    </ul>
+                    <p className="text-green-300">
+                      Expected Result: {testCase.expectedResults}
+                    </p>
+                    <p className="text-yellow-300">Priority: {testCase.priority}</p>
+                  </div>
+                ))}
               </div>
             ) : null}
           </div>
