@@ -1,23 +1,24 @@
 "use client";
-import TestCaseList from "@/components/TestCaseList";
-import { useWorkflow } from "@/hooks/useWorkflow";
-import { getSessionDetails } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Brain,
   CheckCircle,
   Clock,
-  FileText,
-  Sparkles,
+  Zap,
   Target,
+  Sparkles,
+  Brain,
+  FileText,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import AnalysisEditor from "./AnalysisEditor";
-import FetchContextModal from "./FetchContextModal";
 import Sidebar from "./Sidebar";
+import FetchContextModal from "./FetchContextModal";
+import AnalysisEditor from "./AnalysisEditor";
 import TestCaseModal from "./TestCaseModal";
-import { useRouter } from "next/navigation";
+import { useWorkflow } from "@/hooks/useWorkflow";
+import TestCaseList from "@/components/TestCaseList";
+import { useQueryClient } from "@tanstack/react-query";
+import { analyzeRequirements, getSessionDetails } from "@/lib/api";
 
 interface TestCase {
   id: string;
@@ -48,8 +49,6 @@ export default function WorkflowChatInterface({
   const [generatedTestCases, setGeneratedTestCases] = useState<any[]>([]);
   const [rawResponse, setRawResponse] = useState("");
   const [sessionRequirements, setSessionRequirements] = useState("");
-
-  const router = useRouter();
 
   const {
     currentChatId,
@@ -130,20 +129,18 @@ export default function WorkflowChatInterface({
   };
   const handleGenerateTestCases = () => setShowTestCaseModal(true);
   const handleTestCasesGenerated = (testCases: TestCase[]) => {
-    const formattedTestCases = testCases
-      .map((tc, index) => {
-        return `
+    const formattedTestCases = testCases.map((tc, index) => {
+      return `
         Test Case ${index + 1}:
-        Title: ${tc.test_name}
-        Description: ${tc.description}
+        Title: ${tc.test_title}
+        Description: ${tc.test_description}
         Priority: ${tc.priority}
-        Type: ${tc.type}
+        Type: ${tc.test_type}
         Steps:
-          ${tc.steps.map((step, stepIndex) => `- ${step}`).join("\n          ")}
+          ${tc.test_steps.map((step, stepIndex) => `- ${step}`).join("\n          ")}
         Expected Result: ${tc.expected}
       `;
-      })
-      .join("\n\n");
+    }).join("\n\n");
 
     const testCaseMessage = {
       id: `testcases-${Date.now()}`,
@@ -431,10 +428,9 @@ export default function WorkflowChatInterface({
                 <p className="text-slate-400 mb-4">
                   Healthcare test cases are ready for implementation.
                 </p>
-                {sessionDetails &&
-                  sessionDetails.status === "test_cases_generated" && (
-                    <TestCaseList testCases={sessionDetails.test_cases} />
-                  )}
+                {sessionDetails && sessionDetails.status === "test_cases_generated" && (
+                  <TestCaseList testCases={sessionDetails.test_cases} />
+                )}
               </div>
             ) : null}
           </div>

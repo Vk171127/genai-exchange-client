@@ -1,5 +1,60 @@
 "use client";
 import type { Session, Chat, Message, UserSessions } from "./types";
+
+interface ApiSessionDetailsResponse {
+  session_id: string;
+  user_id: string;
+  project_name: string;
+  user_prompt: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  requirements_count: number;
+  edited_requirements_count: number;
+  test_cases_count: number;
+  requirement_test_links_count: number;
+  requirements: Array<{
+    id: string;
+    session_id: string;
+    original_content: string;
+    edited_content: string | null;
+    requirement_type:
+      | "functional"
+      | "non_functional"
+      | "business_rule"
+      | "rag_context"
+      | "security"
+      | "performance"
+      | "usability";
+    priority: "low" | "medium" | "high" | "critical";
+    status: "active" | "inactive" | "deprecated";
+    version: number;
+    created_at: string;
+    updated_at: string;
+  }>;
+  test_cases: Array<{
+    id: string;
+    session_id: string;
+    test_name: string;
+    test_description: string;
+    test_steps: string[];
+    expected_results: string;
+    test_type:
+      | "functional"
+      | "integration"
+      | "security"
+      | "performance"
+      | "usability"
+      | "edge"
+      | "regression";
+    priority: "low" | "medium" | "high" | "critical";
+    status: "active" | "inactive" | "passed" | "failed" | "blocked";
+    created_at: string;
+    updated_at: string;
+    linked_requirements: string[];
+  }>;
+}
+
 import { BACKEND_URL } from "./constants";
 
 // API Configuration
@@ -545,7 +600,7 @@ export async function getSessionDetails(sessionId: string): Promise<{
       | "performance"
       | "usability"
       | "edge"
-      | "regression";
+      | "regression"
     priority: "low" | "medium" | "high" | "critical";
     status: "active" | "inactive" | "passed" | "failed" | "blocked";
     created_at: string;
@@ -600,9 +655,8 @@ export async function getSessionDetails(sessionId: string): Promise<{
       }
     );
 
-    const result = await handleApiResponse<ApiSessionDetailsResponse>(response); // Use the specific type here
+    const result = await handleApiResponse<ApiSessionDetailsResponse>(response);
 
-    // Map the result to the function's return type
     return {
       session_id: result.session_id,
       user_id: result.user_id,
@@ -615,8 +669,8 @@ export async function getSessionDetails(sessionId: string): Promise<{
       edited_requirements_count: result.edited_requirements_count,
       test_cases_count: result.test_cases_count,
       requirement_test_links_count: result.requirement_test_links_count,
-      requirements: result.requirements || [], // Use provided requirements or empty array
-      test_cases: result.test_cases || [], // Use provided test_cases or empty array
+      requirements: result.requirements || [],
+      test_cases: result.test_cases || [],
     };
   } catch (error) {
     console.error("Get session details API error:", error);
