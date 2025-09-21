@@ -138,7 +138,7 @@ export default function WorkflowChatInterface({
         Type: ${tc.test_type}
         Steps:
           ${tc.test_steps.map((step, stepIndex) => `- ${step}`).join("\n          ")}
-        Expected Result: ${tc.expected}
+        Expected Result: ${tc.expected_results}
       `;
     }).join("\n\n");
 
