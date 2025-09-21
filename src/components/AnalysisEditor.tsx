@@ -1,22 +1,28 @@
 // FILE 3: src/components/AnalysisEditor.tsx (ENHANCED UI)
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Save, RotateCcw, Edit3, CheckCircle, AlertCircle } from "lucide-react";
 import { editRequirements } from "@/lib/api";
 
 interface AnalysisEditorProps {
   analysis: string;
+  requirements: string;
   onSave: (editedAnalysis: string) => void;
   sessionId: string;
 }
 
 export default function AnalysisEditor({
   analysis,
+  requirements,
   onSave,
   sessionId,
 }: AnalysisEditorProps) {
   const [editedAnalysis, setEditedAnalysis] = useState(analysis);
   const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setEditedAnalysis(requirements);
+  }, [requirements]);
 
   const handleChange = (value: string) => {
     setEditedAnalysis(value);

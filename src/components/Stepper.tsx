@@ -11,6 +11,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useWorkflow } from "@/hooks/useWorkflow";
+import TestCaseList from "@/components/TestCaseList";
 
 interface StepperProps {
   sessionId: string;
@@ -127,6 +128,9 @@ export default function Stepper({ sessionId }: StepperProps) {
           );
         })}
       </div>
+      {sessionDetails && sessionDetails.status === "test_cases_generated" && (
+        <TestCaseList testCases={sessionDetails.test_cases} />
+      )}
     </div>
   );
 }

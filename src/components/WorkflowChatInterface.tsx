@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -16,7 +16,24 @@ import FetchContextModal from "./FetchContextModal";
 import AnalysisEditor from "./AnalysisEditor";
 import TestCaseModal from "./TestCaseModal";
 import { useWorkflow } from "@/hooks/useWorkflow";
-import { analyzeRequirements } from "@/lib/api";
+import TestCaseList from "@/components/TestCaseList";
+import { useQueryClient } from "@tanstack/react-query";
+import { analyzeRequirements, getSessionDetails } from "@/lib/api";
+
+interface TestCase {
+  id: string;
+  session_id: string;
+  test_name: string;
+  test_description: string;
+  test_steps: string[];
+  expected_results: string;
+  test_type: string;
+  priority: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  linked_requirements: string;
+}
 
 interface WorkflowChatInterfaceProps {
   sessionId: string;
@@ -25,12 +42,13 @@ interface WorkflowChatInterfaceProps {
 export default function WorkflowChatInterface({
   sessionId,
 }: WorkflowChatInterfaceProps) {
+  const queryClient = useQueryClient();
   const [showFetchModal, setShowFetchModal] = useState(false);
   const [showTestCaseModal, setShowTestCaseModal] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState("");
   const [generatedTestCases, setGeneratedTestCases] = useState<any[]>([]);
-
-  const router = useRouter();
+  const [rawResponse, setRawResponse] = useState("");
+  const [sessionRequirements, setSessionRequirements] = useState("");
 
   const {
     currentChatId,
@@ -60,11 +78,36 @@ export default function WorkflowChatInterface({
   };
   const handleStartAnalysis = () => setCurrentStep("analyze");
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (sessionDetails && sessionDetails.status === "rag-context_loaded") {
       setCurrentStep("analyze");
     }
   }, [sessionDetails, setCurrentStep]);
+
+  useEffect(() => {
+    const fetchSessionData = async () => {
+      try {
+        const response = await getSessionDetails(sessionId);
+
+        if (response.status === "requirements_analyzed") {
+          setCurrentStep("edit-analysis");
+          // Filter out rag_context requirements and join the rest
+          const filteredRequirements = response.requirements
+            .filter((req) => req.requirement_type !== "rag_context")
+            .map((req) => req.edited_content || req.original_content)
+            .join("\n");
+          setSessionRequirements(filteredRequirements);
+          console.log("sessionData:", response);
+          console.log("sessionRequirements:", filteredRequirements);
+        }
+      } catch (error) {
+        console.error("Error fetching session data:", error);
+      }
+    };
+
+    fetchSessionData();
+  }, [sessionId, setCurrentStep, setSessionRequirements]);
+
   const handleAnalyzeData = () => {
     if (!userPrompt.trim() || !currentChatId) return;
     try {
@@ -85,17 +128,32 @@ export default function WorkflowChatInterface({
     setCurrentStep("generate-testcases");
   };
   const handleGenerateTestCases = () => setShowTestCaseModal(true);
-  const handleTestCasesGenerated = (testCases: any[]) => {
+  const handleTestCasesGenerated = (testCases: TestCase[]) => {
+    const formattedTestCases = testCases.map((tc, index) => {
+      return `
+        Test Case ${index + 1}:
+        Title: ${tc.title}
+        Description: ${tc.description}
+        Priority: ${tc.priority}
+        Type: ${tc.type}
+        Steps:
+          ${tc.steps.map((step, stepIndex) => `- ${step}`).join("\n          ")}
+        Expected Result: ${tc.expected}
+      `;
+    }).join("\n\n");
+
     const testCaseMessage = {
       id: `testcases-${Date.now()}`,
-      role: "system" as const,
-      text: `Generated ${testCases.length} comprehensive healthcare test cases. Ready for implementation.`,
+      role: "agent" as const, // Changed role to agent to make it look like an agent response
+      text: `Here are the generated test cases:\n\n${formattedTestCases}`,
       created_at: new Date().toISOString(),
       chat_id: currentChatId!,
     };
     setMessages((prev) => [...prev, testCaseMessage]);
-    setGeneratedTestCases(testCases);
-    setCurrentStep("complete");
+    setGeneratedTestCases(testCases); // Keep this state for potential future use
+
+    // Invalidate and refetch session details to get the latest status
+    queryClient.invalidateQueries({ queryKey: ["sessionDetails", sessionId] });
   };
 
   const getWorkflowSteps = () => [
@@ -338,6 +396,7 @@ export default function WorkflowChatInterface({
                   analysis={agentAnalysis}
                   onSave={handleAnalysisEdited}
                   sessionId={sessionId}
+                  requirements={sessionRequirements}
                 />
               </div>
             ) : currentStep === "generate-testcases" ? (
@@ -369,26 +428,9 @@ export default function WorkflowChatInterface({
                 <p className="text-slate-400 mb-4">
                   Healthcare test cases are ready for implementation.
                 </p>
-                {generatedTestCases.map((testCase, index) => (
-                  <div
-                    key={index}
-                    className="bg-slate-800/50 rounded-lg p-4 mb-4"
-                  >
-                    <h4 className="text-white font-semibold">
-                      {testCase.name}
-                    </h4>
-                    <p className="text-slate-400">{testCase.description}</p>
-                    <ul className="list-disc list-inside text-slate-300">
-                      {testCase.steps.map((step, stepIndex) => (
-                        <li key={stepIndex}>{step}</li>
-                      ))}
-                    </ul>
-                    <p className="text-green-300">
-                      Expected Result: {testCase.expectedResults}
-                    </p>
-                    <p className="text-yellow-300">Priority: {testCase.priority}</p>
-                  </div>
-                ))}
+                {sessionDetails && sessionDetails.status === "test_cases_generated" && (
+                  <TestCaseList testCases={sessionDetails.test_cases} />
+                )}
               </div>
             ) : null}
           </div>
