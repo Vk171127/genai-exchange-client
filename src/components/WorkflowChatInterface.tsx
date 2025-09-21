@@ -134,7 +134,7 @@ export default function WorkflowChatInterface({
       .map((tc, index) => {
         return `
         Test Case ${index + 1}:
-        Title: ${tc.title}
+        Title: ${tc.test_name}
         Description: ${tc.description}
         Priority: ${tc.priority}
         Type: ${tc.type}
