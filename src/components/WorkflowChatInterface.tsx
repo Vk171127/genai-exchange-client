@@ -132,7 +132,7 @@ export default function WorkflowChatInterface({
     const formattedTestCases = testCases.map((tc, index) => {
       return `
         Test Case ${index + 1}:
-        Title: ${tc.test_title}
+        Title: ${tc.test_name}
         Description: ${tc.test_description}
         Priority: ${tc.priority}
         Type: ${tc.test_type}
