@@ -17,6 +17,7 @@ import AnalysisEditor from "./AnalysisEditor";
 import FetchContextModal from "./FetchContextModal";
 import Sidebar from "./Sidebar";
 import TestCaseModal from "./TestCaseModal";
+import { useRouter } from "next/navigation";
 
 interface TestCase {
   id: string;
