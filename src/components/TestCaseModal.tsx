@@ -12,21 +12,9 @@ import {
 } from "lucide-react";
 import { generateTestCases } from "@/lib/api";
 import { useSearchParams } from "next/navigation";
+import { TestCase } from "./WorkflowChatInterface";
 
-interface TestCase {
-  id: string;
-  title: string;
-  description: string;
-  priority: "Critical" | "High" | "Medium" | "Low";
-  type:
-    | "Functional"
-    | "Security"
-    | "Integration"
-    | "Performance"
-    | "Compliance";
-  steps: string[];
-  expected: string;
-}
+
 
 interface TestCaseModalProps {
   isOpen: boolean;
@@ -226,7 +214,7 @@ export default function TestCaseModal({
               <div className="space-y-4 mb-6">
                 {generatedTestCases.map((testCase) => {
                   const priorityConfig = getPriorityConfig(testCase.priority);
-                  const TypeIcon = getTypeIcon(testCase.type);
+                  const TypeIcon = getTypeIcon(testCase.test_type);
 
                   return (
                     <div
@@ -242,10 +230,10 @@ export default function TestCaseModal({
                           </div>
                           <div className="flex-1">
                             <h5 className="font-bold text-white text-lg mb-2 group-hover:text-blue-300 transition-colors">
-                              {testCase.id}: {testCase.title}
+                              {testCase.id}: {testCase.test_name}
                             </h5>
                             <p className="text-slate-300 mb-3 leading-relaxed">
-                              {testCase.description}
+                              {testCase.test_description}
                             </p>
                           </div>
                         </div>
@@ -256,7 +244,7 @@ export default function TestCaseModal({
                             {testCase.priority}
                           </span>
                           <span className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-600/30 text-slate-300 border border-slate-600/30">
-                            {testCase.type}
+                            {testCase.test_type}
                           </span>
                         </div>
                       </div>
@@ -267,7 +255,7 @@ export default function TestCaseModal({
                           Test Steps:
                         </h6>
                         <ol className="space-y-2">
-                          {testCase.steps.map((step, i) => (
+                          {testCase.test_steps.map((step, i) => (
                             <li
                               key={i}
                               className="flex items-start gap-3 text-sm text-slate-300"
@@ -287,7 +275,7 @@ export default function TestCaseModal({
                             </span>
                           </div>
                           <p className="text-sm text-green-200">
-                            {testCase.expected}
+                            {testCase.expected_results}
                           </p>
                         </div>
                       </div>

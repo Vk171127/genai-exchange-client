@@ -1,19 +1,21 @@
 import React from 'react';
+import { TestCase } from './WorkflowChatInterface';
 
-interface TestCase {
-  id: string;
-  session_id: string;
-  test_name: string;
-  test_description: string;
-  test_steps: string[];
-  expected_results: string;
-  test_type: string;
-  priority: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  linked_requirements: string[];
-}
+
+// interface TestCase {
+//   id: string;
+//   session_id: string;
+//   test_name: string;
+//   test_description: string;
+//   test_steps: string[];
+//   expected_results: string;
+//   test_type: string;
+//   priority: string;
+//   status: string;
+//   created_at: string;
+//   updated_at: string;
+//   linked_requirements: string[];
+// }
 
 interface TestCaseListProps {
   testCases: TestCase[];

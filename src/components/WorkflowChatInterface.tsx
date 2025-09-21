@@ -19,7 +19,7 @@ import FetchContextModal from "./FetchContextModal";
 import Sidebar from "./Sidebar";
 import TestCaseModal from "./TestCaseModal";
 
-interface TestCase {
+export interface TestCase {
   id: string;
   session_id: string;
   test_name: string;
@@ -34,7 +34,7 @@ interface TestCase {
   linked_requirements: string[];
 }
 
-interface WorkflowChatInterfaceProps {
+export interface WorkflowChatInterfaceProps {
   sessionId: string;
 }
 
