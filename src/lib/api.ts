@@ -487,7 +487,7 @@ function parseTestCasesFromResponse(rawResponse: string): any[] {
 
   // Split the raw response into individual test cases
   const testCaseBlocks = rawResponse
-    .split("---\n\n")
+    ?.split("---\n\n")
     .filter((block) => block.includes("test_id:"));
 
   testCaseBlocks.forEach((block) => {
@@ -690,6 +690,58 @@ export async function updateAnalysis(
     status: "success",
     message: "Analysis updated successfully and saved to session context",
   };
+}
+
+export async function updateSessions(sessionId: string): Promise<any> {
+  if (USE_MOCK_DATA) {
+    await mockDelay(1200);
+    return {
+      session_id: sessionId,
+      user_id: "user123",
+      project_name: "Mock Project",
+      status: "test_cases_generated",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      requirements_count: 52,
+      edited_requirements_count: 0,
+      test_cases_count: 23,
+      requirement_test_links_count: 0,
+      requirements: [],
+      test_cases: [],
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions/sessions/${sessionId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+      }),
+    });
+
+    const result = await handleApiResponse<ApiSessionDetailsResponse>(response);
+
+    return {
+      session_id: result.session_id,
+      user_id: result.user_id,
+      project_name: result.project_name,
+      status: result.status,
+      created_at: result.created_at,
+      updated_at: result.updated_at,
+      requirements_count: result.requirements_count,
+      edited_requirements_count: result.edited_requirements_count,
+      test_cases_count: result.test_cases_count,
+      requirement_test_links_count: result.requirement_test_links_count,
+      requirements: result.requirements || [],
+      test_cases: result.test_cases || [],
+    };
+  } catch (error) {
+    console.error("Update session API error:", error);
+    throw error;
+  }
 }
 
 // ============================================================================
