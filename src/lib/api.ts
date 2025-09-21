@@ -1,4 +1,4 @@
-// src/lib/api.ts - Complete API integration with real backend
+"use client";
 import type { Session, Chat, Message, UserSessions } from "./types";
 import { BACKEND_URL } from "./constants";
 
@@ -430,63 +430,46 @@ export async function generateTestCases(
 function parseTestCasesFromResponse(rawResponse: string): any[] {
   const testCases: any[] = [];
 
-  // Split by test_id to get individual test cases
-  const testBlocks = rawResponse
-    .split(/test_id:\s*/)
-    .filter((block) => block.trim());
+  // Split the raw response into individual test cases
+  const testCaseBlocks = rawResponse
+    .split("---\n\n")
+    .filter((block) => block.includes("test_id:"));
 
-  testBlocks.forEach((block) => {
+  testCaseBlocks.forEach((block) => {
     const testCase: any = {};
     const lines = block.split("\n");
 
-    // More robust parsing
     lines.forEach((line) => {
-      const colonIndex = line.indexOf(":");
-      if (colonIndex === -1) return;
-
-      const key = line.substring(0, colonIndex).trim();
-      const value = line.substring(colonIndex + 1).trim();
-
-      switch (key) {
-        case "test_id":
-        case "":
-          if (value) testCase.id = value;
-          break;
-        case "priority":
-          testCase.priority = value.charAt(0).toUpperCase() + value.slice(1);
-          break;
-        case "summary":
-          testCase.title = value;
-          testCase.description = value;
-          break;
-        case "expected_result":
-          testCase.expectedResults = value;
-          break;
-        case "requirement_traceability":
-          testCase.requirementTraceability = value;
-          break;
+      if (line.startsWith("**test_id:**")) {
+        testCase.name = line.split(":")[1].trim();
+      } else if (line.startsWith("**priority:**")) {
+        testCase.priority = line.split(":")[1].trim();
+      } else if (line.startsWith("**summary:**")) {
+        testCase.description = line.split(":")[1].trim();
+      } else if (line.startsWith("**test_steps:**")) {
+        const steps = [];
+        let i = lines.indexOf(line) + 1;
+        while (i < lines.length && !lines[i].startsWith("**")) {
+          if (lines[i].trim() !== "") {
+            steps.push(lines[i].replace(/^\d+\.\s*/, "").trim());
+          }
+          i++;
+        }
+        testCase.steps = steps;
+      } else if (line.startsWith("**expected_result:**")) {
+        testCase.expectedResults = line.split(":")[1].trim();
       }
     });
 
-    // Extract test steps (numbered list)
-    const stepsMatch = block.match(/test_steps:\s*\n((?:\d+\..+\n?)+)/);
-    if (stepsMatch) {
-      testCase.steps = stepsMatch[1]
-        .split("\n")
-        .filter((step) => step.trim())
-        .map((step) => step.replace(/^\d+\.\s*/, "").trim());
-    }
+    testCase.type = "edge"; // Default type
 
-    // Set defaults
-    testCase.type = testCase.title?.toLowerCase().includes("security")
-      ? "Security"
-      : testCase.title?.toLowerCase().includes("functional")
-      ? "Functional"
-      : "Integration";
-    testCase.category = "Healthcare Testing";
-    testCase.hipaaCompliance = true;
-
-    if (testCase.id && testCase.title) {
+    if (
+      testCase.name &&
+      testCase.description &&
+      testCase.steps &&
+      testCase.expectedResults &&
+      testCase.priority
+    ) {
       testCases.push(testCase);
     }
   });
@@ -529,6 +512,46 @@ export async function getSessionDetails(sessionId: string): Promise<{
   edited_requirements_count: number;
   test_cases_count: number;
   requirement_test_links_count: number;
+  requirements: Array<{
+    id: string;
+    session_id: string;
+    original_content: string;
+    edited_content: string | null;
+    requirement_type:
+      | "functional"
+      | "non_functional"
+      | "business_rule"
+      | "rag_context"
+      | "security"
+      | "performance"
+      | "usability";
+    priority: "low" | "medium" | "high" | "critical";
+    status: "active" | "inactive" | "deprecated";
+    version: number;
+    created_at: string;
+    updated_at: string;
+  }>;
+  test_cases: Array<{
+    id: string;
+    session_id: string;
+    test_name: string;
+    test_description: string;
+    test_steps: string[];
+    expected_results: string;
+    test_type:
+      | "functional"
+      | "integration"
+      | "security"
+      | "performance"
+      | "usability"
+      | "edge"
+      | "regression";
+    priority: "low" | "medium" | "high" | "critical";
+    status: "active" | "inactive" | "passed" | "failed" | "blocked";
+    created_at: string;
+    updated_at: string;
+    linked_requirements: string[];
+  }>;
 }> {
   if (USE_MOCK_DATA) {
     await mockDelay(800);
@@ -537,13 +560,32 @@ export async function getSessionDetails(sessionId: string): Promise<{
       user_id: "user123",
       project_name: "Authentication System Testing",
       user_prompt: "Session creation",
-      status: "test_cases_generated",
+      status: "test_cases_generated", // Example status
       created_at: "2025-09-20T17:33:06.404379",
       updated_at: "2025-09-20T17:36:54.719095",
       requirements_count: 52,
       edited_requirements_count: 0,
       test_cases_count: 23,
       requirement_test_links_count: 0,
+      requirements: [
+        {
+          id: `session_${sessionId}_req_001`,
+          session_id: sessionId,
+          original_content:
+            "The system shall allow users to log in with valid credentials.",
+          edited_content: null, // Or some edited content if available
+          requirement_type: "functional",
+          priority: "high",
+          status: "active",
+          version: 1,
+          created_at: "2025-09-20T17:33:06.404379",
+          updated_at: "2025-09-20T17:33:06.404379",
+        },
+        // Add more mock requirements if needed
+      ],
+      test_cases: [
+        // Mock test cases if needed, similar to the structure provided
+      ],
     };
   }
 
@@ -558,8 +600,9 @@ export async function getSessionDetails(sessionId: string): Promise<{
       }
     );
 
-    const result = await handleApiResponse<any>(response);
+    const result = await handleApiResponse<ApiSessionDetailsResponse>(response); // Use the specific type here
 
+    // Map the result to the function's return type
     return {
       session_id: result.session_id,
       user_id: result.user_id,
@@ -572,6 +615,8 @@ export async function getSessionDetails(sessionId: string): Promise<{
       edited_requirements_count: result.edited_requirements_count,
       test_cases_count: result.test_cases_count,
       requirement_test_links_count: result.requirement_test_links_count,
+      requirements: result.requirements || [], // Use provided requirements or empty array
+      test_cases: result.test_cases || [], // Use provided test_cases or empty array
     };
   } catch (error) {
     console.error("Get session details API error:", error);
@@ -673,3 +718,20 @@ export function getMockMode(): boolean {
   }
   return USE_MOCK_DATA;
 }
+
+export const api = {
+  uploadDocument,
+  getUserSessions,
+  createSession,
+  getChats,
+  getMessages,
+  fetchRAGContext,
+  analyzeRequirements,
+  editRequirements,
+  generateTestCases,
+  sendMessage,
+  getSessionDetails,
+  updateAnalysis,
+  getActiveSessions,
+  getMockMode,
+};
