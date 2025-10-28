@@ -12,14 +12,13 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@/lib/types";
-import { getUserSessions, createSession } from "@/lib/api";
+import { getActiveSessions } from "@/lib/api";
+import NewSessionModal from "@/components/NewSessionModal";
 
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [creating, setCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const router = useRouter();
 
@@ -29,7 +28,7 @@ export default function DashboardPage() {
 
   const loadSessions = async () => {
     try {
-      const response = await getUserSessions();
+      const response = await getActiveSessions();
       setSessions(response.sessions);
     } catch (error) {
       console.error("Load sessions error:", error);
@@ -38,21 +37,9 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCreateSession = async () => {
-    if (!newProjectName.trim()) return;
-
-    setCreating(true);
-    try {
-      const response = await createSession({ project_name: newProjectName });
-      setSessions((prev) => [response.session, ...prev]);
-      setNewProjectName("");
-      setShowNewModal(false);
-      router.push(`/sessions/${response.session.id}`);
-    } catch (error) {
-      console.error("Create session error:", error);
-    } finally {
-      setCreating(false);
-    }
+  const handleSessionCreated = (sessionId: string) => {
+    // Refresh session list after creating new session
+    loadSessions();
   };
 
   const filteredSessions = sessions.filter((session) =>
@@ -180,60 +167,14 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-
-        {/* New Session Modal */}
-        {showNewModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-              <h3 className="text-2xl font-bold text-white mb-2">
-                Create New Healthcare Session
-              </h3>
-              <p className="text-gray-400 mb-6">
-                Start generating test cases for your healthcare application
-              </p>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Healthcare Application Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="e.g., EMR Patient Portal, HIPAA Compliance Module"
-                    className="w-full p-4 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setShowNewModal(false)}
-                    className="flex-1 px-4 py-3 text-gray-300 border border-slate-600 rounded-xl hover:bg-slate-700 transition-colors"
-                    disabled={creating}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateSession}
-                    disabled={creating || !newProjectName.trim()}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5"
-                  >
-                    {creating ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Creating...
-                      </div>
-                    ) : (
-                      "Create Session"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* New Session Modal */}
+      <NewSessionModal
+        isOpen={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onSessionCreated={handleSessionCreated}
+      />
     </div>
   );
 }

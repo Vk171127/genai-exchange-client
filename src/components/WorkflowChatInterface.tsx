@@ -1,8 +1,6 @@
 "use client";
-import TestCaseList from "@/components/TestCaseList";
-import { useWorkflow } from "@/hooks/useWorkflow";
-import { getSessionDetails } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Brain,
@@ -11,13 +9,21 @@ import {
   FileText,
   Sparkles,
   Target,
+  Edit3,
+  Save,
+  RotateCcw,
+  Upload,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import AnalysisEditor from "./AnalysisEditor";
-import FetchContextModal from "./FetchContextModal";
-import Sidebar from "./Sidebar";
-import TestCaseModal from "./TestCaseModal";
+import Sidebar from "@/components/Sidebar";
+import FetchContextModal from "@/components/FetchContextModal";
+import TestCaseList from "@/components/TestCaseList";
+import {
+  getSessionDetails,
+  fetchRAGContext,
+  analyzeRequirements,
+  editRequirements,
+  generateTestCases,
+} from "@/lib/api";
 
 export interface TestCase {
   id: string;
@@ -38,425 +44,535 @@ export interface WorkflowChatInterfaceProps {
   sessionId: string;
 }
 
+type WorkflowStep =
+  | "fetch-context"
+  | "analyze"
+  | "edit-analysis"
+  | "generate-tests"
+  | "review-tests"
+  | "export-ready";
+
 export default function WorkflowChatInterface({
   sessionId,
 }: WorkflowChatInterfaceProps) {
-  const queryClient = useQueryClient();
-  const [showFetchModal, setShowFetchModal] = useState(false);
-  const [showTestCaseModal, setShowTestCaseModal] = useState(false);
-  const [refinementPrompt, setRefinementPrompt] = useState("");
-  const [generatedTestCases, setGeneratedTestCases] = useState<any[]>([]);
-  const [rawResponse, setRawResponse] = useState("");
-  const [sessionRequirements, setSessionRequirements] = useState("");
   const router = useRouter();
-  const {
-    currentChatId,
-    setCurrentChatId,
-    currentStep,
-    setCurrentStep,
-    messages,
-    setMessages,
-    userPrompt,
-    setUserPrompt,
-    agentAnalysis,
-    setAgentAnalysis,
-    chats,
-    chatsLoading,
-    fetchContext,
-    fetchContextLoading,
-    analyzeData,
-    analyzeDataLoading,
-    sessionDetails,
-    sessionDetailsLoading,
-  } = useWorkflow(sessionId);
 
-  const handleNewChat = () => setShowFetchModal(true);
-  const handleContextFetched = (summary: string, prompt: string) => {
-    fetchContext({ prompt });
-    setShowFetchModal(false);
-  };
-  const handleStartAnalysis = () => setCurrentStep("analyze");
+  // ✅ Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // State
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>("fetch-context");
+  const [showFetchModal, setShowFetchModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Data state
+  const [sessionDetails, setSessionDetails] = useState<any>(null);
+  const [userPrompt, setUserPrompt] = useState("");
+  const [agentAnalysis, setAgentAnalysis] = useState("");
+  const [sessionRequirements, setSessionRequirements] = useState("");
+
+  // Test generation state
+  const [testGenerationPrompt, setTestGenerationPrompt] = useState("");
+  const [generatedTestCases, setGeneratedTestCases] = useState<TestCase[]>([]);
+  const [editedTestCases, setEditedTestCases] = useState<TestCase[]>([]);
+  const [isEditingTests, setIsEditingTests] = useState(false);
+
+  // Load session details on mount
   useEffect(() => {
-    if (sessionDetails && sessionDetails.status === "rag-context_loaded") {
-      setCurrentStep("analyze");
-    }
-  }, [sessionDetails, setCurrentStep]);
+    loadSessionDetails();
+  }, [sessionId]);
 
+  // Determine workflow step based on session status
   useEffect(() => {
-    const fetchSessionData = async () => {
-      try {
-        const response = await getSessionDetails(sessionId);
+    if (sessionDetails) {
+      const hasContext = sessionDetails.requirements.some(
+        (r: any) => r.requirement_type === "rag_context"
+      );
+      const hasAnalysis = sessionDetails.status === "requirements_analyzed";
+      const hasTests = sessionDetails.test_cases_count > 0;
 
-        if (response.status === "requirements_analyzed") {
-          setCurrentStep("edit-analysis");
-          // Filter out rag_context requirements and join the rest
-          const filteredRequirements = response.requirements
-            .filter((req) => req.requirement_type !== "rag_context")
-            .map((req) => req.edited_content || req.original_content)
-            .join("\n");
-          setSessionRequirements(filteredRequirements);
-          console.log("sessionData:", response);
-          console.log("response.requirements:", response.requirements);
-          console.log("sessionRequirements:", filteredRequirements);
-        }
-      } catch (error) {
-        console.error("Error fetching session data:", error);
+      if (!hasContext) {
+        setCurrentStep("fetch-context");
+      } else if (!hasAnalysis) {
+        setCurrentStep("analyze");
+      } else if (!hasTests) {
+        setCurrentStep("generate-tests");
+      } else {
+        setCurrentStep("export-ready");
+        setGeneratedTestCases(sessionDetails.test_cases);
+        setEditedTestCases(sessionDetails.test_cases);
       }
-    };
+    }
+  }, [sessionDetails]);
 
-    fetchSessionData();
-  }, [sessionId, setCurrentStep, setSessionRequirements]);
-
-  const handleAnalyzeData = () => {
-    if (!userPrompt.trim() || !currentChatId) return;
+  const loadSessionDetails = async () => {
     try {
-      analyzeData({ chatId: currentChatId, text: userPrompt });
+      const response = await getSessionDetails(sessionId);
+      setSessionDetails(response);
+
+      // Load requirements for analysis editing
+      const filteredRequirements = response.requirements
+        .filter((req: any) => req.requirement_type !== "rag_context")
+        .map((req: any) => req.edited_content || req.original_content)
+        .join("\n");
+      setSessionRequirements(filteredRequirements);
+
+      // Load analysis if exists
+      const analysisReq = response.requirements.find(
+        (r: any) =>
+          r.requirement_type === "functional" ||
+          r.requirement_type === "non_functional"
+      );
+      if (analysisReq) {
+        setAgentAnalysis(analysisReq.original_content);
+      }
+    } catch (error) {
+      console.error("Error loading session details:", error);
+    }
+  };
+
+  // Step 1: Fetch Context
+  const handleContextFetched = async (summary: string, prompt: string) => {
+    setLoading(true);
+    try {
+      await fetchRAGContext(sessionId, prompt);
+      setShowFetchModal(false);
+      await loadSessionDetails();
+      setCurrentStep("analyze");
+    } catch (error) {
+      console.error("Fetch context error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Analyze Requirements
+  const handleAnalyzeData = async () => {
+    if (!userPrompt.trim()) return;
+    setLoading(true);
+    try {
+      const result = await analyzeRequirements(sessionId, userPrompt);
+      setAgentAnalysis(result.analysis);
+      await loadSessionDetails();
+      setCurrentStep("edit-analysis");
     } catch (error) {
       console.error("Analysis error:", error);
+    } finally {
+      setLoading(false);
     }
   };
-  const handleAnalysisEdited = (editedAnalysis: string) => {
-    setAgentAnalysis(editedAnalysis);
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.role === "agent" && msg.id.startsWith("analysis-")
-          ? { ...msg, text: editedAnalysis }
-          : msg
-      )
-    );
-    setCurrentStep("generate-testcases");
-  };
-  const handleGenerateTestCases = () => setShowTestCaseModal(true);
-  const handleTestCasesGenerated = (testCases: TestCase[]) => {
-    const formattedTestCases = testCases
-      .map((tc, index) => {
-        return `
-        Test Case ${index + 1}:
-        Title: ${tc.test_name}
-        Description: ${tc.test_description}
-        Priority: ${tc.priority}
-        Type: ${tc.test_type}
-        Steps:
-          ${tc.test_steps
-            .map((step, stepIndex) => `- ${step}`)
-            .join("\n          ")}
-        Expected Result: ${tc.expected_results}
-      `;
-      })
-      .join("\n\n");
 
-    const testCaseMessage = {
-      id: `testcases-${Date.now()}`,
-      role: "agent" as const, // Changed role to agent to make it look like an agent response
-      text: `Here are the generated test cases:\n\n${formattedTestCases}`,
-      created_at: new Date().toISOString(),
-      chat_id: currentChatId!,
-    };
-    setMessages((prev) => [...prev, testCaseMessage]);
-    setGeneratedTestCases(testCases); // Keep this state for potential future use
-
-    // Invalidate and refetch session details to get the latest status
-    queryClient.invalidateQueries({ queryKey: ["sessionDetails", sessionId] });
+  // Step 3: Save Analysis
+  const handleSaveAnalysis = async () => {
+    setLoading(true);
+    try {
+      await editRequirements(sessionId, [agentAnalysis]);
+      await loadSessionDetails();
+      setCurrentStep("generate-tests");
+    } catch (error) {
+      console.error("Save analysis error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Step 4: Generate Test Cases
+  const handleGenerateTests = async () => {
+    if (!testGenerationPrompt.trim()) return;
+    setLoading(true);
+    try {
+      const result = await generateTestCases(sessionId, testGenerationPrompt);
+      setGeneratedTestCases(result.testCases);
+      setEditedTestCases(result.testCases);
+      await loadSessionDetails();
+      setCurrentStep("review-tests");
+    } catch (error) {
+      console.error("Test generation error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 5: Edit Tests
+  const handleEditTest = (index: number, field: keyof TestCase, value: any) => {
+    setEditedTestCases((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleSaveTests = () => {
+    setGeneratedTestCases(editedTestCases);
+    setIsEditingTests(false);
+    setCurrentStep("export-ready");
+  };
+
+  const handleResetTests = () => {
+    setEditedTestCases(generatedTestCases);
+    setIsEditingTests(false);
+  };
+
+  // Step 6: Export
+  const handleExport = async () => {
+    console.log("Exporting to ADO/Jira:", editedTestCases);
+    alert("Export to ADO/Jira - Feature to be implemented");
+  };
+
+  // Workflow steps configuration
   const getWorkflowSteps = () => [
     {
-      id: "no-chat",
+      id: "fetch",
       title: "Fetch",
       icon: FileText,
-      color:
-        currentStep === "no-chat"
-          ? "from-blue-500 to-cyan-500"
-          : "from-gray-500 to-gray-600",
+      active: ["fetch-context", "analyze"].includes(currentStep),
+      complete: sessionDetails?.requirements.some(
+        (r: any) => r.requirement_type === "rag_context"
+      ),
     },
     {
-      id: "context-fetched",
+      id: "analyze",
       title: "Analyze",
       icon: Brain,
-      color: ["context-fetched", "analyze"].includes(currentStep)
-        ? "from-purple-500 to-pink-500"
-        : "from-gray-500 to-gray-600",
+      active: ["analyze", "edit-analysis"].includes(currentStep),
+      complete: sessionDetails?.status === "requirements_analyzed",
     },
     {
-      id: "edit-analysis",
-      title: "Review",
-      icon: Target,
-      color:
-        currentStep === "edit-analysis"
-          ? "from-amber-500 to-orange-500"
-          : "from-gray-500 to-gray-600",
-    },
-    {
-      id: "generate-testcases",
+      id: "generate",
       title: "Generate",
       icon: Sparkles,
-      color: ["generate-testcases", "complete"].includes(currentStep)
-        ? "from-green-500 to-emerald-500"
-        : "from-gray-500 to-gray-600",
+      active: ["generate-tests", "review-tests"].includes(currentStep),
+      complete: generatedTestCases.length > 0,
+    },
+    {
+      id: "export",
+      title: "Export",
+      icon: Upload,
+      active: currentStep === "export-ready",
+      complete: false,
     },
   ];
 
-  const isStepComplete = (stepId: string) => {
-    const stepOrder = [
-      "no-chat",
-      "context-fetched",
-      "analyze",
-      "edit-analysis",
-      "generate-testcases",
-      "complete",
-    ];
-    const currentIndex = stepOrder.indexOf(currentStep);
-    const stepIndex = stepOrder.indexOf(stepId);
-
-    const isRagContextLoaded =
-      sessionDetails && sessionDetails.status === "rag-context_loaded";
-
-    if (isRagContextLoaded && stepId === "no-chat") {
-      return true;
-    }
-
-    return (
-      stepIndex < currentIndex ||
-      (stepId === "generate-testcases" && currentStep === "complete")
-    );
-  };
-
-  const isStepActive = (stepId: string) => {
-    return (
-      currentStep === stepId ||
-      (stepId === "context-fetched" && currentStep === "analyze") ||
-      (stepId === "generate-testcases" && currentStep === "complete")
-    );
-  };
-
-  if (chatsLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-3 animate-pulse">
-            <Clock className="w-6 h-6 text-white" />
-          </div>
-          <div className="text-white font-medium">
-            Loading Healthcare Session...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
-      <div className="flex h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <Sidebar
-          sessionId={sessionId}
-          chats={chats}
-          currentChatId={currentChatId}
-          onChatSelect={setCurrentChatId}
-          onNewChat={handleNewChat}
-          sessionDetails={sessionDetails}
-        />
+    <div className="flex h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Sidebar */}
+      <Sidebar
+        sessionId={sessionId}
+        isOpen={sidebarOpen}
+        onToggle={setSidebarOpen}
+      />
 
-        <div className="flex-1 flex flex-col">
-          {/* Compact Header with Progress */}
-          <header className="bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.push("/dashboard")}
-                  className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Dashboard
-                </button>
-                <div className="w-px h-4 bg-slate-600" />
-                <div>
-                  <h1 className="text-lg font-bold text-white">
-                    Healthcare Test Generation
-                  </h1>
-                  <p className="text-xs text-slate-400">
-                    Session: {sessionId.slice(-8)}
-                  </p>
-                </div>
-              </div>
+      {/* Main Content - ✅ Width adjusts based on sidebar */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          sidebarOpen ? "ml-72" : "ml-12"
+        }`}
+      >
+        {/* Header */}
+        <header className="bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-lg font-bold text-white">
+                Healthcare Test Generation
+              </h1>
+              <p className="text-xs text-slate-400">
+                Session: {sessionId.slice(-8)}
+              </p>
             </div>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-900 font-semibold rounded-lg hover:bg-slate-100 transition-colors text-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Dashboard
+            </button>
+          </div>
 
-            {/* Progress Steps */}
-            <div className="flex items-center justify-center">
-              <div className="flex items-center space-x-6">
-                {getWorkflowSteps().map((step, index) => {
-                  const StepIcon = step.icon;
-                  const isComplete = isStepComplete(step.id);
-                  const isActive = isStepActive(step.id);
-
-                  return (
-                    <div key={step.id} className="flex items-center">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`relative w-8 h-8 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 ${
-                            isActive
-                              ? `bg-gradient-to-br ${step.color} scale-105`
-                              : isComplete
-                              ? "bg-gradient-to-br from-green-500 to-emerald-600"
-                              : "bg-slate-700 hover:bg-slate-600"
-                          }`}
-                        >
-                          {isComplete ? (
-                            <CheckCircle className="w-4 h-4 text-white" />
-                          ) : (
-                            <StepIcon
-                              className={`w-4 h-4 ${
-                                isActive ? "text-white" : "text-slate-300"
-                              }`}
-                            />
-                          )}
-                        </div>
-                        <div className="mt-2 text-center">
-                          <div
-                            className={`text-xs font-medium ${
-                              isActive
-                                ? "text-white"
-                                : isComplete
-                                ? "text-green-300"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {step.title}
-                          </div>
-                        </div>
-                      </div>
-
-                      {index < getWorkflowSteps().length - 1 && (
-                        <div
-                          className={`w-12 h-0.5 mx-3 transition-colors ${
-                            isComplete ? "bg-green-500" : "bg-slate-600"
+          {/* Progress Steps */}
+          <div className="flex items-center justify-center gap-4">
+            {getWorkflowSteps().map((step, index) => {
+              const StepIcon = step.icon;
+              return (
+                <div key={step.id} className="flex items-center">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all duration-200 ${
+                        step.active
+                          ? "bg-gradient-to-br from-blue-500 to-purple-600 scale-110"
+                          : step.complete
+                          ? "bg-gradient-to-br from-green-500 to-emerald-600"
+                          : "bg-slate-700"
+                      }`}
+                    >
+                      {step.complete ? (
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      ) : (
+                        <StepIcon
+                          className={`w-5 h-5 ${
+                            step.active ? "text-white" : "text-slate-400"
                           }`}
                         />
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <div className="flex-1 overflow-hidden">
-            {currentStep === "no-chat" ? (
-              <div className="flex-1 flex items-center justify-center p-8">
-                <div className="text-center max-w-lg mx-auto">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                    <FileText className="w-8 h-8 text-white" />
+                    <span
+                      className={`mt-2 text-xs font-medium ${
+                        step.active
+                          ? "text-white"
+                          : step.complete
+                          ? "text-green-300"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {step.title}
+                    </span>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">
-                    Welcome to Healthcare Test Generation
-                  </h3>
-                  <p className="text-slate-400 mb-6 leading-relaxed">
-                    Start by clicking "New Analysis" to fetch healthcare context
-                    and begin your AI-powered workflow.
+                  {index < getWorkflowSteps().length - 1 && (
+                    <div
+                      className={`w-16 h-0.5 mx-2 transition-colors ${
+                        step.complete ? "bg-green-500" : "bg-slate-700"
+                      }`}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto">
+            {/* Step 1: Fetch Context */}
+            {currentStep === "fetch-context" && (
+              <div className="text-center py-20">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+                  <FileText className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-white mb-3">
+                  Fetch Healthcare Context
+                </h2>
+                <p className="text-slate-400 text-lg mb-8">
+                  Start by retrieving relevant context for your healthcare
+                  application
+                </p>
+                <button
+                  onClick={() => setShowFetchModal(true)}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:-translate-y-1"
+                >
+                  Fetch Context
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: Analyze Requirements */}
+            {currentStep === "analyze" && (
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Brain className="w-6 h-6 text-purple-400" />
+                    <h2 className="text-xl font-bold text-white">
+                      Analyze Healthcare Requirements
+                    </h2>
+                  </div>
+                  <p className="text-slate-400">
+                    Provide a prompt for AI to analyze the fetched context
                   </p>
                 </div>
-              </div>
-            ) : currentStep === "context-fetched" ? (
-              <div className="flex-1 flex flex-col p-6">
-                <div className="max-w-3xl mx-auto flex-1 overflow-y-auto space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className="p-4 bg-slate-800/50 rounded-lg text-slate-200 text-sm"
-                    >
-                      {message.text}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-center mt-6">
-                  <button
-                    onClick={handleStartAnalysis}
-                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium"
-                  >
-                    Start Healthcare Analysis
-                  </button>
-                </div>
-              </div>
-            ) : currentStep === "analyze" ? (
-              <div className="p-6 max-w-3xl mx-auto">
+
                 <textarea
                   value={userPrompt}
                   onChange={(e) => setUserPrompt(e.target.value)}
-                  placeholder="e.g., Analyze patient registration workflow for HIPAA compliance, edge cases, and security..."
-                  className="w-full p-4 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white min-h-[120px]"
+                  placeholder="e.g., Analyze patient registration workflow for HIPAA compliance, security vulnerabilities, and edge cases..."
+                  className="w-full p-6 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white placeholder-slate-400 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 text-base"
                 />
+
                 <button
                   onClick={handleAnalyzeData}
-                  disabled={analyzeDataLoading || !userPrompt.trim()}
-                  className="mt-4 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg disabled:opacity-50"
+                  disabled={loading || !userPrompt.trim()}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg"
                 >
-                  {analyzeDataLoading ? "Analyzing..." : "Analyze Data"}
+                  {loading ? "Analyzing..." : "Analyze Requirements"}
                 </button>
               </div>
-            ) : currentStep === "edit-analysis" ? (
-              <div className="p-6 max-w-3xl mx-auto">
-                <AnalysisEditor
-                  analysis={agentAnalysis}
-                  onSave={handleAnalysisEdited}
-                  sessionId={sessionId}
-                  requirements={sessionRequirements}
-                />
+            )}
+
+            {/* Step 3: Edit Analysis */}
+            {currentStep === "edit-analysis" && (
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Edit3 className="w-6 h-6 text-amber-400" />
+                    <h2 className="text-xl font-bold text-white">
+                      Review & Edit Analysis
+                    </h2>
+                  </div>
+                  <p className="text-slate-400">
+                    Review the AI-generated analysis and make edits if needed
+                  </p>
+                </div>
+
+                <div className="p-6 bg-slate-800/50 border border-slate-700/30 rounded-2xl">
+                  <h3 className="text-white font-semibold mb-3">
+                    Requirements:
+                  </h3>
+                  <div className="text-slate-300 whitespace-pre-wrap mb-6 text-sm p-4 bg-slate-900/50 rounded-lg">
+                    {sessionRequirements}
+                  </div>
+
+                  <h3 className="text-white font-semibold mb-3">
+                    AI Analysis:
+                  </h3>
+                  <textarea
+                    value={agentAnalysis}
+                    onChange={(e) => setAgentAnalysis(e.target.value)}
+                    className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 min-h-[300px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setAgentAnalysis(sessionRequirements)}
+                    className="flex-1 px-6 py-3 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-all"
+                  >
+                    <RotateCcw className="w-4 h-4 inline mr-2" />
+                    Reset
+                  </button>
+                  <button
+                    onClick={handleSaveAnalysis}
+                    disabled={loading}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 transition-all"
+                  >
+                    {loading ? "Saving..." : "Save & Continue"}
+                  </button>
+                </div>
               </div>
-            ) : currentStep === "generate-testcases" ? (
-              <div className="p-6 text-center">
-                <Sparkles className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-                <h3 className="text-white text-lg mb-2">Analysis Complete</h3>
-                <p className="text-slate-400 mb-4">
-                  Generate test cases from the refined analysis
-                </p>
+            )}
+
+            {/* Step 4: Generate Tests */}
+            {currentStep === "generate-tests" && (
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Sparkles className="w-6 h-6 text-green-400" />
+                    <h2 className="text-xl font-bold text-white">
+                      Generate Test Cases
+                    </h2>
+                  </div>
+                  <p className="text-slate-400">
+                    Specify what type of test cases you want to generate
+                  </p>
+                </div>
+
                 <textarea
-                  value={refinementPrompt}
-                  onChange={(e) => setRefinementPrompt(e.target.value)}
-                  placeholder="e.g., Refine analysis for edge cases and security vulnerabilities..."
-                  className="w-full p-4 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white min-h-[120px] mb-4"
+                  value={testGenerationPrompt}
+                  onChange={(e) => setTestGenerationPrompt(e.target.value)}
+                  placeholder="e.g., Generate comprehensive functional test cases for patient login module including security and edge cases..."
+                  className="w-full p-6 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white placeholder-slate-400 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 text-base"
                 />
+
                 <button
-                  onClick={handleGenerateTestCases}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg"
+                  onClick={handleGenerateTests}
+                  disabled={loading || !testGenerationPrompt.trim()}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg"
                 >
-                  Generate Test Cases
+                  {loading ? "Generating Tests..." : "Generate Test Cases"}
                 </button>
               </div>
-            ) : currentStep === "complete" ? (
-              <div className="p-6">
-                <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                <h3 className="text-green-300 text-lg mb-2">
-                  Workflow Complete!
-                </h3>
-                <p className="text-slate-400 mb-4">
-                  Healthcare test cases are ready for implementation.
-                </p>
-                {sessionDetails &&
-                  sessionDetails.status === "test_cases_generated" && (
-                    <TestCaseList testCases={sessionDetails.test_cases} />
+            )}
+
+            {/* Step 5: Review Tests */}
+            {currentStep === "review-tests" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
+                  <div className="flex items-center gap-3">
+                    <Target className="w-6 h-6 text-purple-400" />
+                    <div>
+                      <h2 className="text-xl font-bold text-white">
+                        Review Generated Tests
+                      </h2>
+                      <p className="text-slate-400 text-sm">
+                        {editedTestCases.length} test cases generated
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsEditingTests(!isEditingTests)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  >
+                    {isEditingTests ? "Cancel Edit" : "Edit Tests"}
+                  </button>
+                </div>
+
+                <TestCaseList testCases={editedTestCases} />
+
+                <div className="flex gap-4">
+                  {isEditingTests ? (
+                    <>
+                      <button
+                        onClick={handleResetTests}
+                        className="flex-1 px-6 py-3 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-all"
+                      >
+                        <RotateCcw className="w-4 h-4 inline mr-2" />
+                        Reset Changes
+                      </button>
+                      <button
+                        onClick={handleSaveTests}
+                        className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all"
+                      >
+                        <Save className="w-4 h-4 inline mr-2" />
+                        Save Tests
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setCurrentStep("export-ready")}
+                      className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all text-lg"
+                    >
+                      Approve Tests
+                    </button>
                   )}
+                </div>
               </div>
-            ) : null}
+            )}
+
+            {/* Step 6: Export Ready */}
+            {currentStep === "export-ready" && (
+              <div className="space-y-6">
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+                    <Upload className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-3">
+                    Tests Ready for Export
+                  </h2>
+                  <p className="text-slate-400 text-lg mb-8">
+                    {editedTestCases.length} approved test cases ready to export
+                  </p>
+
+                  <button
+                    onClick={handleExport}
+                    className="px-8 py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:-translate-y-1 text-lg"
+                  >
+                    <Upload className="w-5 h-5 inline mr-2" />
+                    Export to ADO/Jira
+                  </button>
+                </div>
+
+                <TestCaseList testCases={editedTestCases} />
+              </div>
+            )}
           </div>
-        </div>
+        </main>
       </div>
 
+      {/* Fetch Context Modal */}
       <FetchContextModal
         isOpen={showFetchModal}
         onClose={() => setShowFetchModal(false)}
         onContextFetched={handleContextFetched}
         sessionId={sessionId}
-        loading={fetchContextLoading}
+        loading={loading}
       />
-
-      <TestCaseModal
-        isOpen={showTestCaseModal}
-        onClose={() => setShowTestCaseModal(false)}
-        onTestCasesGenerated={handleTestCasesGenerated}
-        analysis={agentAnalysis}
-        sessionId={sessionId}
-      />
-    </>
+    </div>
   );
 }
