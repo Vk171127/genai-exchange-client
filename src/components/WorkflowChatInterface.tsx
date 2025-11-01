@@ -379,6 +379,14 @@ export default function WorkflowChatInterface({
               <p className="text-xs text-slate-400">
                 Session: {sessionId.slice(8)}
               </p>
+              {sessionDetails?.alm_tool && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-xs text-blue-400 font-medium">
+                    {sessionDetails.alm_tool}
+                  </span>
+                </>
+              )}
             </div>
             <Link
               href="/dashboard"

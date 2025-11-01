@@ -128,6 +128,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
 
 export async function createSession(data: {
   project_name: string;
+  alm_tool: string;
 }): Promise<{ session: Session }> {
   try {
     const response = await fetch(`${API_BASE_URL}/sessions/sessions`, {
@@ -138,6 +139,7 @@ export async function createSession(data: {
       body: JSON.stringify({
         user_id: CURRENT_USER_ID,
         project_name: data.project_name,
+        alm_tool: data.alm_tool, // Include ALM tool in the backend request
       }),
     });
 
@@ -154,8 +156,8 @@ export async function createSession(data: {
       id: result.session_id,
       project_name: result.project_name,
       status:
-        result.status === "created"
-          ? "draft"
+        result.status === "in_progress"
+          ? "in_progress"
           : (result.status as Session["status"]),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -530,8 +532,8 @@ export async function getActiveSessions(): Promise<{ sessions: Session[] }> {
       id: sessionData.session_id,
       project_name: sessionData.project_name,
       status:
-        sessionData.status === "created"
-          ? "draft"
+        sessionData.status === "in_progress"
+          ? "in_progress"
           : (sessionData.status as Session["status"]),
       created_at: sessionData.created_at,
       updated_at: sessionData.updated_at,

@@ -9,6 +9,9 @@ import {
   Zap,
   Search,
   Filter,
+  CheckCheck,
+  CheckCheckIcon,
+  LaptopMinimalCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@/lib/types";
@@ -48,10 +51,23 @@ export default function DashboardPage() {
   );
 
   const getStats = () => {
-    const active = sessions.filter((s) => s.status === "active").length;
+    const inProgress = sessions.filter(
+      (s) => s.status === "in_progress" || s.status === "rag_context_loaded"
+    ).length;
+    const analyzing = sessions.filter(
+      (s) => s.status === "requirements_analyzed"
+    ).length;
+    const generated = sessions.filter(
+      (s) => s.status === "test_cases_generated"
+    ).length;
     const completed = sessions.filter((s) => s.status === "completed").length;
-    const draft = sessions.filter((s) => s.status === "draft").length;
-    return { active, completed, draft, total: sessions.length };
+    return {
+      inProgress,
+      analyzing,
+      generated,
+      completed,
+      total: sessions.length,
+    };
   };
 
   const stats = getStats();
@@ -59,54 +75,67 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       {/* Navigation */}
-      <nav className="bg-black/20 backdrop-blur-md border-b border-white/10">
+      <nav className="bg-black/20 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg">
                 HT
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">
+                <h1 className="text-xl font-bold text-white">
                   Healthcare TestGen
                 </h1>
-                <p className="text-blue-300 text-sm">Dashboard</p>
+                <p className="text-blue-300 text-xs">
+                  AI-Powered Test Generation
+                </p>
               </div>
             </div>
 
-            <button
-              onClick={() => router.push("/")}
-              className="text-blue-300 hover:text-white transition-colors"
-            >
-              ← Back to Home
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowNewModal(true)}
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5"
+              >
+                <Plus className="w-4 h-4" />
+                New Session
+              </button>
+              <button
+                onClick={() => router.push("/")}
+                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-300 border border-white/20"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                  />
+                </svg>
+                <span className="hidden sm:inline">Home</span>
+              </button>
+            </div>
           </div>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-12">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
-              Your Healthcare Sessions
-            </h1>
-            <p className="text-gray-300 text-lg">
-              Manage automated test case generation for healthcare applications
-            </p>
-          </div>
-
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="group flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-          >
-            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-            New Session
-          </button>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Your Healthcare Sessions
+          </h1>
+          <p className="text-gray-300 text-lg">
+            Manage automated test case generation for healthcare applications
+          </p>
         </div>
-
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <StatsCard
             icon={Activity}
             title="Total Sessions"
@@ -115,21 +144,27 @@ export default function DashboardPage() {
           />
           <StatsCard
             icon={Zap}
-            title="Active"
-            value={stats.active}
-            color="from-green-500 to-emerald-500"
+            title="In Progress"
+            value={stats.inProgress}
+            color="from-purple-500 to-indigo-500"
+          />
+          <StatsCard
+            icon={BarChart3}
+            title="Analyzed"
+            value={stats.analyzing}
+            color="from-amber-500 to-orange-500"
           />
           <StatsCard
             icon={CheckCircle}
-            title="Completed"
-            value={stats.completed}
-            color="from-purple-500 to-pink-500"
+            title="Generated"
+            value={stats.generated}
+            color="from-yellow-500 to-emerald-500"
           />
           <StatsCard
-            icon={Clock}
-            title="Draft"
-            value={stats.draft}
-            color="from-orange-500 to-red-500"
+            icon={LaptopMinimalCheck}
+            title="Completed"
+            value={stats.completed}
+            color="from-green-600 to-emerald-600"
           />
         </div>
 

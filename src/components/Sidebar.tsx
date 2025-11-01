@@ -3,8 +3,9 @@ import React, { useState, useEffect } from "react";
 import { Plus, Menu, X, MessageSquare, Settings } from "lucide-react";
 import type { Session } from "@/lib/types";
 import { getActiveSessions } from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import NewSessionModal from "@/components/NewSessionModal";
+import Link from "next/link";
 
 interface SidebarProps {
   sessionId: string;
@@ -16,20 +17,34 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     fetchActiveSessions();
+  }, []);
+
+  // ✅ Refresh sessions when sessionId changes (status updated)
+  useEffect(() => {
+    fetchActiveSessions();
+  }, [sessionId]);
+
+  // ✅ Poll for updates every 10 seconds to catch status changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchActiveSessions();
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchActiveSessions = async () => {
     try {
       const { sessions } = await getActiveSessions();
 
-      // ✅ SORT BY TIME - Most recent first
       const sortedSessions = sessions.sort((a, b) => {
         const dateA = new Date(a.updated_at || a.created_at).getTime();
         const dateB = new Date(b.updated_at || b.created_at).getTime();
-        return dateB - dateA; // Descending order (newest first)
+        return dateB - dateA;
       });
 
       setActiveSessions(sortedSessions);
@@ -39,7 +54,7 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
   };
 
   const handleSessionCreated = () => {
-    fetchActiveSessions(); // Refresh list
+    fetchActiveSessions();
   };
 
   const formatDate = (dateString: string) => {
@@ -64,6 +79,18 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
       day: "numeric",
       month: "short",
     });
+  };
+
+  // ✅ Get status display label
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
+      in_progress: "In Progress",
+      rag_context_loaded: "Context Loaded",
+      requirements_analyzed: "Analyzed",
+      test_cases_generated: "Tests Generated",
+      completed: "Completed",
+    };
+    return statusMap[status] || status;
   };
 
   return (
@@ -141,9 +168,10 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
                   const isCurrentSession = session.id === sessionId;
 
                   return (
-                    <button
+                    <Link
                       key={session.id}
-                      onClick={() => router.push(`/sessions/${session.id}`)}
+                      href={`/sessions/${session.id}`}
+                      scroll={false}
                       className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg transition-all duration-200 mb-1 group ${
                         isCurrentSession
                           ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30"
@@ -167,7 +195,7 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
                               : "text-slate-500 group-hover:text-slate-400"
                           }`}
                         >
-                          {session.status}
+                          {getStatusLabel(session.status)}
                         </p>
                       </div>
 
@@ -180,7 +208,7 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
                       >
                         {formatDate(session.updated_at || session.created_at)}
                       </span>
-                    </button>
+                    </Link>
                   );
                 })
               )}

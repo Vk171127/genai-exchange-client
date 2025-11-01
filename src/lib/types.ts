@@ -17,7 +17,13 @@ export interface Chat {
 export interface Session {
   id: string;
   project_name: string;
-  status: "active" | "completed" | "draft";
+  status:
+    | "in_progress"
+    | "rag_context_loaded"
+    | "requirements_analyzed"
+    | "test_cases_generated"
+    | "completed";
+  alm_tool?: string;
   created_at: string;
   updated_at?: string;
 }

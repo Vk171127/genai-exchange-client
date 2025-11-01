@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { createSession } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
@@ -10,22 +10,32 @@ interface NewSessionModalProps {
   onSessionCreated?: (sessionId: string) => void;
 }
 
+type ALMTool = "Azure DevOps" | "Jira";
+
 export default function NewSessionModal({
   isOpen,
   onClose,
   onSessionCreated,
 }: NewSessionModalProps) {
   const [newProjectName, setNewProjectName] = useState("");
+  const [almTool, setAlmTool] = useState<ALMTool>("Azure DevOps");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const router = useRouter();
+
+  const almTools: ALMTool[] = ["Azure DevOps", "Jira"];
 
   const handleCreateSession = async () => {
     if (!newProjectName.trim()) return;
 
     setCreating(true);
     try {
-      const response = await createSession({ project_name: newProjectName });
+      const response = await createSession({
+        project_name: newProjectName,
+        alm_tool: almTool, // Include ALM tool in the request
+      });
       setNewProjectName("");
+      setAlmTool("Azure DevOps");
       onClose();
 
       // Callback for parent component to refresh session list
@@ -46,6 +56,8 @@ export default function NewSessionModal({
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !creating && newProjectName.trim()) {
       handleCreateSession();
+    } else if (e.key === "Escape") {
+      onClose();
     }
   };
 
@@ -83,15 +95,61 @@ export default function NewSessionModal({
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
+              onKeyDown={handleKeyPress}
               placeholder="e.g., EMR Patient Portal, HIPAA Compliance Module"
               className="w-full p-4 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               disabled={creating}
               autoFocus
             />
-            <p className="text-xs text-slate-500 mt-2">
-              Press Enter to create or Esc to cancel
-            </p>
           </div>
+
+          {/* ALM Tool Dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              ALM Tool
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                disabled={creating}
+                className="w-full p-4 bg-slate-700 border border-slate-600 rounded-xl text-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>{almTool}</span>
+                <ChevronDown
+                  className={`w-5 h-5 text-gray-400 transition-transform ${
+                    isDropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute z-10 w-full mt-2 bg-slate-700 border border-slate-600 rounded-xl shadow-xl overflow-hidden">
+                  {almTools.map((tool) => (
+                    <button
+                      key={tool}
+                      onClick={() => {
+                        setAlmTool(tool);
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left transition-colors ${
+                        almTool === tool
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:bg-slate-600"
+                      }`}
+                    >
+                      {tool}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            Press Enter to create or Esc to cancel
+          </p>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
