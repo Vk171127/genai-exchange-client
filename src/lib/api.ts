@@ -73,9 +73,9 @@ class ApiError extends Error {
 
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    console.log(response);
+    // console.log(response);
     const errorData = await response.json().catch(() => ({}));
-    console.log(errorData);
+    // console.log(errorData);
     throw new ApiError(
       response.status,
       errorData.message || `HTTP ${response.status}: ${response.statusText}`
