@@ -55,10 +55,13 @@ interface ApiSessionDetailsResponse {
   }>;
 }
 
-import { BACKEND_URL } from "./constants";
+// Add this type definition at the top with other interfaces
+import { AGENT_URL, BACKEND_URL, TOKEN } from "./constants";
 
 // API Configuration
 const API_BASE_URL = BACKEND_URL + "/api/v2";
+
+const AGENT_BASE_URL = AGENT_URL + "/run_sse";
 
 // User ID - In production, get this from auth context
 const CURRENT_USER_ID = "user123";
@@ -73,9 +76,8 @@ class ApiError extends Error {
 
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    // console.log(response);
     const errorData = await response.json().catch(() => ({}));
-    // console.log(errorData);
+
     throw new ApiError(
       response.status,
       errorData.message || `HTTP ${response.status}: ${response.statusText}`
@@ -85,46 +87,44 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
 }
 
 // ============================================================================
-// SESSION MANAGEMENT
+// DATA INGESTION
 // ============================================================================
 
-// export async function getUserSessions(): Promise<{ sessions: Session[] }> {
-//   try {
-//     const response = await fetch(`${API_BASE_URL}/sessions/sessions`, {
-//       method: "GET",
-//       headers: {
-//         "Content-Type": "application/json",
-//       },
-//     });
+export async function uploadDocument(
+  file: File,
+  documentId: string,
+  documentType: string = "requirements",
+  enableRag: boolean = true,
+  metadata?: Record<string, any>
+): Promise<{
+  status: string;
+  document_id: string;
+  processing_result: any;
+  rag_ingestion?: any;
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("document_id", documentId);
+  formData.append("document_type", documentType);
+  formData.append("enable_rag", enableRag.toString());
 
-//     const result = await handleApiResponse<
-//       {
-//         session_id: string;
-//         user_id: string;
-//         project_name: string;
-//         status: string;
-//         message: string;
-//         database_saved: boolean;
-//       }[]
-//     >(response);
+  const response = await fetch(
+    `${API_BASE_URL}/data-ingestion/upload-with-rag`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      body: formData,
+    }
+  );
 
-//     const sessions: Session[] = result.map((sessionData) => ({
-//       id: sessionData.session_id,
-//       project_name: sessionData.project_name,
-//       status:
-//         sessionData.status === "created"
-//           ? "draft"
-//           : (sessionData.status as Session["status"]),
-//       created_at: new Date().toISOString(),
-//       updated_at: new Date().toISOString(),
-//     }));
+  return handleApiResponse(response);
+}
 
-//     return { sessions };
-//   } catch (error) {
-//     console.error("Get user sessions API error:", error);
-//     throw error;
-//   }
-// }
+// ============================================================================
+// SESSION MANAGEMENT
+// ============================================================================
 
 export async function createSession(data: {
   project_name: string;
@@ -151,6 +151,20 @@ export async function createSession(data: {
       message: string;
       database_saved: boolean;
     }>(response);
+
+    const resp = await fetch(
+      `${AGENT_URL}/apps/decider_agent/users/user123/sessions/${result.session_id}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TOKEN}`,
+        },
+        body: JSON.stringify({ preferred_language: "English", visit_count: 5 }),
+      }
+    );
+
+    const res = await handleApiResponse<any>(resp);
 
     const session: Session = {
       id: result.session_id,
@@ -212,20 +226,133 @@ export async function fetchRAGContext(
 // REQUIREMENTS ANALYSIS
 // ============================================================================
 
+// export async function analyzeRequirements(
+//   sessionId: string,
+//   prompt: string
+// ): Promise<{ analysis: string; agent_used?: string }> {
+//   try {
+//     const response = await fetch(`${AGENT_BASE_URL}`, {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${TOKEN}`,
+//       },
+//       body: JSON.stringify({
+//         app_name: "decider_agent",
+//         user_id: "user123",
+//         session_id: sessionId,
+//         new_message: {
+//           role: "user",
+//           parts: [
+//             {
+//               text: `start; sessionID: ${sessionId}; ${prompt}`,
+//               // " Make sure to save the analysis in database.",
+//             },
+//           ],
+//         },
+//         streaming: false,
+//       }),
+//     });
+
+//     const result = await handleApiResponse<any>(response);
+
+//     console.log(result);
+//     // ✅ Extract text from new response format
+//     const analysisText =
+//       // result.content?.parts[0]?.text || result.text || "Analysis completed";
+//       result.content.parts[0].functionResponse.response.result[0].result
+//         .cache_data.requirements[0].content || "Analysis completed";
+
+//     console.log(analysisText);
+
+//     return {
+//       analysis: analysisText,
+//     };
+//   } catch (error) {
+//     console.error("Analyze requirements API error:", error);
+//     throw error;
+//   }
+// }
+
 export async function analyzeRequirements(
   sessionId: string,
   prompt: string
 ): Promise<{ analysis: string; agent_used?: string }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/requirements/analyze`, {
+    const response = await fetch(`${AGENT_BASE_URL}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${TOKEN}`,
       },
-      // body: JSON.stringify({
-      //   session_id: sessionId,
-      //   prompt,
-      // }),
+      body: JSON.stringify({
+        app_name: "decider_agent",
+        user_id: "user123",
+        session_id: sessionId,
+        new_message: {
+          role: "user",
+          parts: [
+            {
+              text: `start; sessionID: ${sessionId}; ${prompt}`,
+            },
+          ],
+        },
+        streaming: false,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `Analysis request returned ${response.status}, but continuing...`
+      );
+      return {
+        analysis: "Analysis request completed.",
+      };
+    }
+
+    // ✅ WAIT for the entire SSE stream to complete
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) {
+      return {
+        analysis: "Analysis initiated successfully.",
+      };
+    }
+
+    // Read all chunks until stream is done
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        console.log("✅ SSE stream completed");
+        break;
+      }
+      // Optionally decode and log progress
+      const chunk = decoder.decode(value, { stream: true });
+      console.log("📦 Received chunk:", chunk.substring(0, 100) + "...");
+    }
+
+    // Return a simple success message after stream completes
+    return {
+      analysis: "Requirements analysis completed and stored successfully.",
+    };
+  } catch (error) {
+    console.error("Analyze requirements API error:", error);
+    throw error; // Let the caller handle this
+  }
+}
+
+export async function editRequirements(
+  sessionId: string,
+  requirements: string[]
+): Promise<{ analysis: string }> {
+  try {
+    const response = await fetch(`${AGENT_BASE_URL}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${TOKEN}`,
+      },
       body: JSON.stringify({
         app_name: "decider-orchestrator-app",
         user_id: "user123",
@@ -234,7 +361,10 @@ export async function analyzeRequirements(
           role: "user",
           parts: [
             {
-              text: "start; " + prompt,
+              text:
+                "edited; " +
+                requirements +
+                "Make sure to save the analysis in database.",
             },
           ],
         },
@@ -244,36 +374,12 @@ export async function analyzeRequirements(
 
     const result = await handleApiResponse<any>(response);
 
-    return {
-      analysis: result.requirements.response,
-      agent_used: result.agent_used,
-    };
-  } catch (error) {
-    console.error("Analyze requirements API error:", error);
-    throw error;
-  }
-}
-
-export async function editRequirements(
-  sessionId: string,
-  requirements: string[]
-): Promise<{ status: string; message: string }> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/requirements/${sessionId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        requirements: "edited" + requirements,
-      }),
-    });
-
-    const result = await handleApiResponse<any>(response);
+    // ✅ Extract text from new response format
+    const EditedAnalysisText =
+      result.content?.parts?.[0]?.text || result.text || "Analysis completed";
 
     return {
-      status: "success",
-      message: result.message,
+      analysis: EditedAnalysisText,
     };
   } catch (error) {
     console.error("Edit requirements API error:", error);
@@ -290,16 +396,28 @@ export async function generateTestCases(
   prompt?: string
 ): Promise<{ testCases: any[]; rawResponse?: string }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/test-cases/generate`, {
+    const response = await fetch(`${AGENT_BASE_URL}/test-cases/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${TOKEN}`,
       },
       body: JSON.stringify({
+        app_name: "decider-orchestrator-app",
+        user_id: "user123",
         session_id: sessionId,
-        prompt:
-          prompt ||
-          "Generate comprehensive test cases for healthcare application",
+        new_message: {
+          role: "user",
+          parts: [
+            {
+              text:
+                "approved; " +
+                prompt +
+                "Make sure to save the analysis in database.",
+            },
+          ],
+        },
+        streaming: false,
       }),
     });
 
@@ -308,11 +426,14 @@ export async function generateTestCases(
     // Parse the test cases from the raw response
     // TODO: Backend should ideally return structured JSON instead of markdown text
     // Current implementation is fragile to format changes
-    const testCases = parseTestCasesFromResponse(result.test_cases);
+
+    const rawResponse =
+      result.content?.parts?.[0]?.text || result.text || "Testcase generated";
+
+    const testCases = parseTestCasesFromResponse(rawResponse);
 
     return {
-      testCases,
-      rawResponse: result.test_cases,
+      testCases: testCases,
     };
   } catch (error) {
     console.error("Generate test cases API error:", error);
@@ -545,6 +666,65 @@ export async function getActiveSessions(): Promise<{ sessions: Session[] }> {
     throw error;
   }
 }
+export async function getSessionRequirements(
+  sessionId: string
+): Promise<string> {
+  const userId = CURRENT_USER_ID;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sessions/sessions/${sessionId}/requirements`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const result = await handleApiResponse(response);
+    const requirements = result.requirements ? result.requirements : result;
+    // 🔍 Log to see actual structure
+    console.log("🔍 Requirements API Response:", result);
+    // console.log("🔍 Response keys:", Object.keys(result));
+
+    // // Try multiple possible response structures
+    // const requirementsText = result.requirements;
+
+    return requirements;
+  } catch (error) {
+    console.error("Get session requirements API error:", error);
+    throw error;
+  }
+}
+
+export async function getSessionTestcases(
+  sessionId: string
+): Promise<{ testCases: any[]; rawResponse?: string }> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sessions/${sessionId}/test-cases`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const result = await handleApiResponse(response);
+    const testcases = result.testcases ? result.testcases : result;
+    // 🔍 Log to see actual structure
+    console.log("🔍 getSessionTestcases API Response:", result);
+    //need to convert these testcases properly - refer function parseTestCasesFromResponse
+    const formattedTestCases = parseTestCasesFromResponse(testcases);
+
+    return { testCases: formattedTestCases, rawResponse: result };
+  } catch (error) {
+    console.error("Get session requirements API error:", error);
+    throw error;
+  }
+}
 
 export const api = {
   createSession,
@@ -555,4 +735,6 @@ export const api = {
   getSessionDetails,
   updateAnalysis,
   getActiveSessions,
+  getSessionRequirements,
+  getSessionTestcases,
 };

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Brain,
@@ -13,7 +12,6 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
 import FetchContextModal from "@/components/FetchContextModal";
 import TestCaseList from "@/components/TestCaseList";
 import {
@@ -22,8 +20,10 @@ import {
   analyzeRequirements,
   editRequirements,
   generateTestCases,
+  getSessionRequirements,
 } from "@/lib/api";
 import Link from "next/link";
+import Sitemap from "./SiteMap";
 
 export interface TestCase {
   id: string;
@@ -52,22 +52,15 @@ type SessionStatus =
   | "completed";
 
 type WorkflowStep = "fetch" | "analyze" | "generate" | "export";
-type SubStep = "input" | "processing" | "review";
 
 export default function WorkflowChatInterface({
   sessionId,
 }: WorkflowChatInterfaceProps) {
-  const router = useRouter();
-
-  // Sidebar state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   // Session state
   const [sessionDetails, setSessionDetails] = useState<any>(null);
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("in_progress");
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("fetch");
-  const [currentSubStep, setCurrentSubStep] = useState<SubStep>("input");
   const [loading, setLoading] = useState(false);
 
   // Fetch Context state
@@ -77,17 +70,18 @@ export default function WorkflowChatInterface({
   const [analysisPrompt, setAnalysisPrompt] = useState("");
   const [analysisResult, setAnalysisResult] = useState("");
   const [editedAnalysis, setEditedAnalysis] = useState("");
+  const [showAnalysisInput, setShowAnalysisInput] = useState(true);
 
   // Test Generation state
   const [testGenerationPrompt, setTestGenerationPrompt] = useState("");
   const [generatedTestCases, setGeneratedTestCases] = useState<TestCase[]>([]);
-  const [editedTestCases, setEditedTestCases] = useState<TestCase[]>([]);
   const [selectedTestIds, setSelectedTestIds] = useState<Set<string>>(
     new Set()
   );
 
   // Export state
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportedLink, setExportedLink] = useState<string>("");
 
   // Load session details on mount
   useEffect(() => {
@@ -100,7 +94,7 @@ export default function WorkflowChatInterface({
       setSessionDetails(response);
       setSessionStatus(response.status as SessionStatus);
 
-      // Determine current step based on status
+      // Determine current step and load data based on status
       determineCurrentStep(response.status as SessionStatus, response);
     } catch (error) {
       console.error("Error loading session details:", error);
@@ -111,16 +105,15 @@ export default function WorkflowChatInterface({
     switch (status) {
       case "in_progress":
         setCurrentStep("fetch");
-        setCurrentSubStep("input");
         break;
 
       case "rag_context_loaded":
         setCurrentStep("analyze");
-        setCurrentSubStep("input");
+        setShowAnalysisInput(true);
         break;
 
       case "requirements_analyzed":
-        // Load the analysis for display
+        // Load the analysis for editing
         const analysisReq = details.requirements.find(
           (r: any) =>
             r.requirement_type === "functional" ||
@@ -132,82 +125,102 @@ export default function WorkflowChatInterface({
             analysisReq.edited_content || analysisReq.original_content
           );
         }
-        setCurrentStep("generate");
-        setCurrentSubStep("input");
+        setCurrentStep("analyze");
+        setShowAnalysisInput(false); // Show edit view
         break;
 
       case "test_cases_generated":
-        // Load test cases if available
+        // Load test cases
         if (details.test_cases && details.test_cases.length > 0) {
           setGeneratedTestCases(details.test_cases);
-          setEditedTestCases(details.test_cases);
-          // Select all by default
           const allIds = new Set<string>(
             details.test_cases.map((tc: TestCase) => tc.id)
           );
           setSelectedTestIds(allIds);
         }
         setCurrentStep("export");
-        setCurrentSubStep("input");
         break;
 
       case "completed":
         setCurrentStep("export");
-        setCurrentSubStep("review");
         break;
 
       default:
         setCurrentStep("fetch");
-        setCurrentSubStep("input");
     }
   };
 
   // ==================== STEP 1: FETCH CONTEXT ====================
   const handleContextFetched = async (summary: string, prompt: string) => {
     setLoading(true);
-    setCurrentSubStep("processing");
     try {
       await fetchRAGContext(sessionId, prompt);
       setShowFetchModal(false);
-      await loadSessionDetails();
-      setCurrentStep("analyze");
-      setCurrentSubStep("input");
+      await loadSessionDetails(); // Refresh to get new status
     } catch (error) {
       console.error("Fetch context error:", error);
-      setCurrentSubStep("input");
+      alert("Failed to fetch context. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   // ==================== STEP 2: ANALYZE REQUIREMENTS ====================
+  // const handleAnalyzeRequirements = async () => {
+  //   if (!analysisPrompt.trim()) return;
+
+  //   setLoading(true);
+  //   try {
+  //     const result = await analyzeRequirements(sessionId, analysisPrompt);
+  //     console.log(result);
+  //     setAnalysisResult(result?.analysis);
+  //     setEditedAnalysis(result?.analysis);
+  //     setShowAnalysisInput(false); // Switch to edit view
+  //     await loadSessionDetails(); // Refresh session status
+  //   } catch (error) {
+  //     console.error("Analysis error:", error);
+  //     alert("Failed to analyze requirements. Please try again.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const handleAnalyzeRequirements = async () => {
     if (!analysisPrompt.trim()) return;
 
     setLoading(true);
-    setCurrentSubStep("processing");
     try {
-      const result = await analyzeRequirements(sessionId, analysisPrompt);
-      setAnalysisResult(result.analysis);
-      setEditedAnalysis(result.analysis);
-      setCurrentSubStep("review");
+      // Step 1: Trigger AI analysis (creates and stores data in backend)
+      await analyzeRequirements(sessionId, analysisPrompt);
+      console.log("✅ Analysis triggered successfully");
+
+      // Step 2: Wait a moment for backend to save the data
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 seconds
+
+      // Step 3: Fetch the actual saved requirements from database
+      const requirements = await getSessionRequirements(sessionId);
+      console.log("📋 Fetched requirements:", requirements);
+
+      setAnalysisResult(requirements);
+      setEditedAnalysis(requirements);
+      setShowAnalysisInput(false); // Switch to edit view
+
+      // Step 4: Refresh session status
+      await loadSessionDetails();
     } catch (error) {
       console.error("Analysis error:", error);
-      setCurrentSubStep("input");
+      alert("Failed to analyze requirements. Please try again.");
     } finally {
       setLoading(false);
     }
   };
-
   const handleSaveAnalysis = async () => {
     setLoading(true);
     try {
       await editRequirements(sessionId, [editedAnalysis]);
-      await loadSessionDetails();
-      setCurrentStep("generate");
-      setCurrentSubStep("input");
+      await loadSessionDetails(); // This will move to generate step
     } catch (error) {
       console.error("Save analysis error:", error);
+      alert("Failed to save analysis. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -217,7 +230,7 @@ export default function WorkflowChatInterface({
     setAnalysisPrompt("");
     setAnalysisResult("");
     setEditedAnalysis("");
-    setCurrentSubStep("input");
+    setShowAnalysisInput(true);
   };
 
   // ==================== STEP 3: GENERATE TEST CASES ====================
@@ -225,46 +238,18 @@ export default function WorkflowChatInterface({
     if (!testGenerationPrompt.trim()) return;
 
     setLoading(true);
-    setCurrentSubStep("processing");
     try {
       const result = await generateTestCases(sessionId, testGenerationPrompt);
       setGeneratedTestCases(result.testCases);
-      setEditedTestCases(result.testCases);
-      // Select all by default
       const allIds = new Set(result.testCases.map((tc: TestCase) => tc.id));
       setSelectedTestIds(allIds);
-      setCurrentSubStep("review");
+      await loadSessionDetails(); // This will move to export step
     } catch (error) {
       console.error("Test generation error:", error);
-      setCurrentSubStep("input");
+      alert("Failed to generate test cases. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleEditTestCase = (
-    index: number,
-    field: keyof TestCase,
-    value: any
-  ) => {
-    setEditedTestCases((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
-    });
-  };
-
-  const handleRegenerateTests = () => {
-    setTestGenerationPrompt("");
-    setGeneratedTestCases([]);
-    setEditedTestCases([]);
-    setSelectedTestIds(new Set());
-    setCurrentSubStep("input");
-  };
-
-  const handleContinueToExport = () => {
-    setCurrentStep("export");
-    setCurrentSubStep("input");
   };
 
   // ==================== STEP 4: EXPORT ====================
@@ -281,33 +266,39 @@ export default function WorkflowChatInterface({
   };
 
   const handleToggleSelectAll = () => {
-    if (selectedTestIds.size === editedTestCases.length) {
+    if (selectedTestIds.size === generatedTestCases.length) {
       setSelectedTestIds(new Set());
     } else {
-      const allIds = new Set(editedTestCases.map((tc) => tc.id));
+      const allIds = new Set(generatedTestCases.map((tc) => tc.id));
       setSelectedTestIds(allIds);
     }
   };
 
   const handleExportConfirm = async () => {
-    // TODO: Implement actual export API call
-    console.log("Exporting test cases:", Array.from(selectedTestIds));
-
-    // Simulate export
     setLoading(true);
     try {
-      // await exportTestCases(sessionId, Array.from(selectedTestIds));
-      await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate API call
+      // TODO: Replace with actual export API
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Update status to completed
+      // Mock link based on ALM tool
+      const almTool = sessionDetails?.alm_tool || "Azure DevOps";
+      const mockLink =
+        almTool === "Jira"
+          ? `https://yourcompany.atlassian.net/browse/PROJECT-${sessionId.slice(
+              0,
+              8
+            )}`
+          : `https://dev.azure.com/yourorg/project/_workitems/edit/${sessionId.slice(
+              0,
+              8
+            )}`;
+
+      setExportedLink(mockLink);
       setSessionStatus("completed");
-      setShowExportModal(false);
-      alert(
-        `Successfully exported ${selectedTestIds.size} test cases to ADO/Jira!`
-      );
     } catch (error) {
       console.error("Export error:", error);
       alert("Failed to export test cases. Please try again.");
+      setShowExportModal(false);
     } finally {
       setLoading(false);
     }
@@ -363,17 +354,19 @@ export default function WorkflowChatInterface({
             <h1 className="text-lg font-bold text-white">
               {sessionDetails?.project_name || "Loading..."}
             </h1>
-            <p className="text-xs text-slate-400">
-              Session: {sessionId.slice(8)}
-            </p>
-            {sessionDetails?.alm_tool && (
-              <>
-                <span className="text-slate-600">•</span>
-                <span className="text-xs text-blue-400 font-medium">
-                  {sessionDetails.alm_tool}
-                </span>
-              </>
-            )}
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-400">
+                Session: {sessionId.slice(8)}
+              </p>
+              {sessionDetails?.alm_tool && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-xs text-blue-400 font-medium">
+                    {sessionDetails.alm_tool}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
           <Link
             href="/dashboard"
@@ -471,8 +464,8 @@ export default function WorkflowChatInterface({
           {/* ==================== ANALYZE STEP ==================== */}
           {currentStep === "analyze" && (
             <div className="space-y-6">
-              {/* Sub-step: Input */}
-              {currentSubStep === "input" && (
+              {showAnalysisInput ? (
+                /* Analysis Input */
                 <>
                   <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
                     <div className="flex items-center gap-3 mb-4">
@@ -509,10 +502,8 @@ export default function WorkflowChatInterface({
                     )}
                   </button>
                 </>
-              )}
-
-              {/* Sub-step: Review & Edit */}
-              {currentSubStep === "review" && (
+              ) : (
+                /* Analysis Review & Edit */
                 <>
                   <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
                     <div className="flex items-center justify-between mb-4">
@@ -551,7 +542,7 @@ export default function WorkflowChatInterface({
 
                   <button
                     onClick={handleSaveAnalysis}
-                    disabled={loading || !editedAnalysis.trim()}
+                    disabled={loading || !editedAnalysis}
                     className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
                   >
                     {loading ? (
@@ -574,82 +565,40 @@ export default function WorkflowChatInterface({
           {/* ==================== GENERATE TEST CASES STEP ==================== */}
           {currentStep === "generate" && (
             <div className="space-y-6">
-              {/* Sub-step: Input */}
-              {currentSubStep === "input" && (
-                <>
-                  <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Sparkles className="w-6 h-6 text-green-400" />
-                      <h2 className="text-xl font-bold text-white">
-                        Generate Test Cases
-                      </h2>
-                    </div>
-                    <p className="text-slate-400">
-                      Specify what type of test cases you want to generate
-                    </p>
-                  </div>
+              <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <Sparkles className="w-6 h-6 text-green-400" />
+                  <h2 className="text-xl font-bold text-white">
+                    Generate Test Cases
+                  </h2>
+                </div>
+                <p className="text-slate-400">
+                  Specify what type of test cases you want to generate
+                </p>
+              </div>
 
-                  <textarea
-                    value={testGenerationPrompt}
-                    onChange={(e) => setTestGenerationPrompt(e.target.value)}
-                    placeholder="e.g., Generate comprehensive functional test cases for patient login module including security and edge cases..."
-                    className="w-full p-6 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white placeholder-slate-400 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 text-base"
-                    disabled={loading}
-                  />
+              <textarea
+                value={testGenerationPrompt}
+                onChange={(e) => setTestGenerationPrompt(e.target.value)}
+                placeholder="e.g., Generate comprehensive functional test cases for patient login module including security and edge cases..."
+                className="w-full p-6 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white placeholder-slate-400 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 text-base"
+                disabled={loading}
+              />
 
-                  <button
-                    onClick={handleGenerateTestCases}
-                    disabled={loading || !testGenerationPrompt.trim()}
-                    className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating Test Cases...
-                      </>
-                    ) : (
-                      "Generate Test Cases"
-                    )}
-                  </button>
-                </>
-              )}
-
-              {/* Sub-step: Review & Edit */}
-              {currentSubStep === "review" && (
-                <>
-                  <div className="flex items-center justify-between p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
-                    <div className="flex items-center gap-3">
-                      <Sparkles className="w-6 h-6 text-green-400" />
-                      <div>
-                        <h2 className="text-xl font-bold text-white">
-                          Review Generated Test Cases
-                        </h2>
-                        <p className="text-slate-400 text-sm">
-                          {editedTestCases.length} test cases generated
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleRegenerateTests}
-                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Regenerate
-                    </button>
-                  </div>
-
-                  <TestCaseList testCases={editedTestCases} />
-
-                  <button
-                    onClick={handleContinueToExport}
-                    disabled={editedTestCases.length === 0}
-                    className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    Continue to Export
-                  </button>
-                </>
-              )}
+              <button
+                onClick={handleGenerateTestCases}
+                disabled={loading || !testGenerationPrompt.trim()}
+                className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Generating Test Cases...
+                  </>
+                ) : (
+                  "Generate Test Cases"
+                )}
+              </button>
             </div>
           )}
 
@@ -665,7 +614,8 @@ export default function WorkflowChatInterface({
                         Export Test Cases
                       </h2>
                       <p className="text-slate-400 text-sm">
-                        Select test cases to export to ADO/Jira
+                        Select test cases to export to{" "}
+                        {sessionDetails?.alm_tool || "ADO/Jira"}
                       </p>
                     </div>
                   </div>
@@ -673,7 +623,7 @@ export default function WorkflowChatInterface({
                     onClick={handleToggleSelectAll}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
                   >
-                    {selectedTestIds.size === editedTestCases.length
+                    {selectedTestIds.size === generatedTestCases.length
                       ? "Deselect All"
                       : "Select All"}
                   </button>
@@ -682,7 +632,7 @@ export default function WorkflowChatInterface({
 
               {/* Test Case Selection List */}
               <div className="space-y-3">
-                {editedTestCases.map((testCase) => (
+                {generatedTestCases.map((testCase) => (
                   <div
                     key={testCase.id}
                     className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
@@ -728,7 +678,8 @@ export default function WorkflowChatInterface({
               >
                 <Upload className="w-5 h-5" />
                 Export {selectedTestIds.size} Test Case
-                {selectedTestIds.size !== 1 ? "s" : ""} to ADO/Jira
+                {selectedTestIds.size !== 1 ? "s" : ""} to{" "}
+                {sessionDetails?.alm_tool || "ADO/Jira"}
               </button>
             </div>
           )}
@@ -743,7 +694,8 @@ export default function WorkflowChatInterface({
                 Export Completed!
               </h2>
               <p className="text-slate-400 text-lg mb-8">
-                Test cases have been successfully exported to ADO/Jira
+                Test cases have been successfully exported to{" "}
+                {sessionDetails?.alm_tool || "ADO/Jira"}
               </p>
               <Link
                 href="/dashboard"
@@ -754,6 +706,8 @@ export default function WorkflowChatInterface({
               </Link>
             </div>
           )}
+
+          <Sitemap currentSessionId={sessionId} />
         </div>
       </main>
 
@@ -770,57 +724,118 @@ export default function WorkflowChatInterface({
       {showExportModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8 max-w-md w-full mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-amber-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Confirm Export</h3>
-                <p className="text-slate-400 text-sm">
-                  This action will export test cases
-                </p>
-              </div>
-            </div>
+            {!exportedLink ? (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">
+                      Confirm Export
+                    </h3>
+                    <p className="text-slate-400 text-sm">
+                      Export to {sessionDetails?.alm_tool || "ADO/Jira"}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="bg-slate-900/50 rounded-xl p-4 mb-6">
-              <p className="text-slate-300 text-sm">
-                Are you sure you want to export{" "}
-                <span className="text-amber-400 font-semibold">
-                  {selectedTestIds.size}
-                </span>{" "}
-                test case{selectedTestIds.size !== 1 ? "s" : ""} to ADO/Jira?
-              </p>
-              <p className="text-slate-500 text-xs mt-2">
-                This will mark the session as completed.
-              </p>
-            </div>
+                <div className="bg-slate-900/50 rounded-xl p-4 mb-6">
+                  <p className="text-slate-300 text-sm">
+                    Are you sure you want to export{" "}
+                    <span className="text-amber-400 font-semibold">
+                      {selectedTestIds.size}
+                    </span>{" "}
+                    test case
+                    {selectedTestIds.size !== 1 ? "s" : ""} to{" "}
+                    <span className="text-blue-400 font-semibold">
+                      {sessionDetails?.alm_tool || "ADO/Jira"}
+                    </span>
+                    ?
+                  </p>
+                  <p className="text-slate-500 text-xs mt-2">
+                    This will mark the session as completed.
+                  </p>
+                </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowExportModal(false)}
-                disabled={loading}
-                className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleExportConfirm}
-                disabled={loading}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    Export Now
-                  </>
-                )}
-              </button>
-            </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowExportModal(false)}
+                    disabled={loading}
+                    className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleExportConfirm}
+                    disabled={loading}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        Export Now
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">
+                      Export Successful!
+                    </h3>
+                    <p className="text-slate-400 text-sm">
+                      Test cases exported to{" "}
+                      {sessionDetails?.alm_tool || "ADO/Jira"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/50 rounded-xl p-4 mb-6">
+                  <p className="text-slate-300 text-sm mb-3">
+                    <span className="text-green-400 font-semibold">
+                      {selectedTestIds.size}
+                    </span>{" "}
+                    test cases have been exported successfully!
+                  </p>
+                  <div className="flex items-center gap-2 p-3 bg-slate-800 rounded-lg">
+                    <span className="text-slate-400 text-xs flex-shrink-0">
+                      View in {sessionDetails?.alm_tool || "ADO"}:
+                    </span>
+                    <a
+                      href={exportedLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 text-xs font-mono truncate transition-colors underline"
+                    >
+                      {exportedLink}
+                    </a>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportedLink("");
+                  }}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Done
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

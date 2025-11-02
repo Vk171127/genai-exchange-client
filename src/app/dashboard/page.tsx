@@ -9,15 +9,14 @@ import {
   Zap,
   Search,
   Filter,
-  CheckCheck,
-  CheckCheckIcon,
-  LaptopMinimalCheck,
+  Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@/lib/types";
 import { getActiveSessions } from "@/lib/api";
 import NewSessionModal from "@/components/NewSessionModal";
 import { SessionCard } from "@/components/SessionCard";
+import Sitemap from "@/components/SiteMap";
 
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -152,19 +151,19 @@ export default function DashboardPage() {
             icon={BarChart3}
             title="Analyzed"
             value={stats.analyzing}
-            color="from-amber-500 to-orange-500"
+            color="from-amber-500 to-orange-700"
+          />
+          <StatsCard
+            icon={Sparkles}
+            title="Generated"
+            value={stats.generated}
+            color="from-teal-500 to-cyan-500"
           />
           <StatsCard
             icon={CheckCircle}
-            title="Generated"
-            value={stats.generated}
-            color="from-yellow-500 to-emerald-500"
-          />
-          <StatsCard
-            icon={LaptopMinimalCheck}
             title="Completed"
             value={stats.completed}
-            color="from-green-600 to-emerald-600"
+            color="from-lime-500 to-green-500"
           />
         </div>
 
@@ -211,6 +210,7 @@ export default function DashboardPage() {
         onClose={() => setShowNewModal(false)}
         onSessionCreated={handleSessionCreated}
       />
+      <Sitemap />
     </div>
   );
 }

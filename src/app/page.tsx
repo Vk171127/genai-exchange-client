@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Brain,
 } from "lucide-react";
+import Sitemap from "@/components/SiteMap";
 
 export default function HomePage() {
   return (
@@ -25,12 +26,6 @@ export default function HomePage() {
             </span>
           </div>
 
-          {/* <Link
-            href="/dashboard"
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-          >
-            Go to Dashboard
-          </Link> */}
           <Link
             href="/dashboard"
             className="group px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
@@ -171,6 +166,7 @@ export default function HomePage() {
           />
         </div>
       </div>
+      <Sitemap />
 
       {/* Footer */}
       <footer className="border-t border-white/10 bg-black/20 backdrop-blur-sm">
