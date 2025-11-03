@@ -84,7 +84,7 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
   // ✅ Get status display label
   const getStatusLabel = (status: string) => {
     const statusMap: Record<string, string> = {
-      in_progress: "In Progress",
+      created: "In Progress",
       rag_context_loaded: "Context Loaded",
       requirements_analyzed: "Analyzed",
       test_cases_generated: "Tests Generated",

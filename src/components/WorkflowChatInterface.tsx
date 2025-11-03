@@ -24,6 +24,7 @@ import {
 } from "@/lib/api";
 import Link from "next/link";
 import Sitemap from "./SiteMap";
+import { Requirement } from "@/lib/types";
 
 export interface TestCase {
   id: string;
@@ -48,6 +49,8 @@ type SessionStatus =
   | "in_progress"
   | "rag_context_loaded"
   | "requirements_analyzed"
+  | "processing_edited_requirements"
+  | "generating_test_cases"
   | "test_cases_generated"
   | "completed";
 
@@ -93,7 +96,7 @@ export default function WorkflowChatInterface({
       const response = await getSessionDetails(sessionId);
       setSessionDetails(response);
       setSessionStatus(response.status as SessionStatus);
-
+      console.log(response);
       // Determine current step and load data based on status
       determineCurrentStep(response.status as SessionStatus, response);
     } catch (error) {
@@ -127,6 +130,16 @@ export default function WorkflowChatInterface({
         }
         setCurrentStep("analyze");
         setShowAnalysisInput(false); // Show edit view
+        break;
+
+      case "processing_edited_requirements":
+        // ✅ User saved analysis - Move to GENERATE step
+        setCurrentStep("generate");
+        break;
+
+      case "generating_test_cases":
+        // ✅ User saved analysis - Move to GENERATE step
+        setCurrentStep("generate");
         break;
 
       case "test_cases_generated":
@@ -189,20 +202,18 @@ export default function WorkflowChatInterface({
 
     setLoading(true);
     try {
-      // Step 1: Trigger AI analysis (creates and stores data in backend)
       await analyzeRequirements(sessionId, analysisPrompt);
       console.log("✅ Analysis triggered successfully");
 
-      // Step 2: Wait a moment for backend to save the data
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 seconds
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Step 3: Fetch the actual saved requirements from database
       const requirements = await getSessionRequirements(sessionId);
       console.log("📋 Fetched requirements:", requirements);
 
-      setAnalysisResult(requirements);
-      setEditedAnalysis(requirements);
+      setAnalysisResult(requirements[0].original_content);
+      setEditedAnalysis(requirements[0].original_content);
       setShowAnalysisInput(false); // Switch to edit view
+      console.log("ea", editedAnalysis);
 
       // Step 4: Refresh session status
       await loadSessionDetails();
@@ -216,8 +227,26 @@ export default function WorkflowChatInterface({
   const handleSaveAnalysis = async () => {
     setLoading(true);
     try {
-      await editRequirements(sessionId, [editedAnalysis]);
-      await loadSessionDetails(); // This will move to generate step
+      await editRequirements(sessionId, editedAnalysis);
+      console.log("✅ Requirements edited successfully");
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const updatedRequirements = await getSessionRequirements(sessionId);
+      console.log("📋 Fetched updated requirements:", updatedRequirements);
+
+      if (updatedRequirements.length > 0) {
+        // Use edited_content if available, otherwise original_content
+        const latestContent =
+          updatedRequirements[0].edited_content ||
+          updatedRequirements[0].original_content;
+
+        setAnalysisResult(latestContent);
+        setEditedAnalysis(latestContent);
+      }
+
+      // Step 4: Refresh session to move to next step
+      await loadSessionDetails();
     } catch (error) {
       console.error("Save analysis error:", error);
       alert("Failed to save analysis. Please try again.");
@@ -239,11 +268,20 @@ export default function WorkflowChatInterface({
 
     setLoading(true);
     try {
-      const result = await generateTestCases(sessionId, testGenerationPrompt);
-      setGeneratedTestCases(result.testCases);
-      const allIds = new Set(result.testCases.map((tc: TestCase) => tc.id));
-      setSelectedTestIds(allIds);
-      await loadSessionDetails(); // This will move to export step
+      await generateTestCases(sessionId, testGenerationPrompt);
+      console.log("✅ Test cases generation triggered");
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      await loadSessionDetails();
+
+      if (sessionDetails?.test_cases && sessionDetails.test_cases.length > 0) {
+        setGeneratedTestCases(sessionDetails.test_cases);
+        const allIds = new Set<string>(
+          sessionDetails.test_cases.map((tc: TestCase) => tc.id)
+        );
+        setSelectedTestIds(allIds);
+      }
     } catch (error) {
       console.error("Test generation error:", error);
       alert("Failed to generate test cases. Please try again.");
@@ -251,7 +289,6 @@ export default function WorkflowChatInterface({
       setLoading(false);
     }
   };
-
   // ==================== STEP 4: EXPORT ====================
   const handleToggleTestSelection = (testId: string) => {
     setSelectedTestIds((prev) => {
@@ -313,6 +350,7 @@ export default function WorkflowChatInterface({
       completed: [
         "rag_context_loaded",
         "requirements_analyzed",
+        "processing_edited_requirements",
         "test_cases_generated",
         "completed",
       ].includes(sessionStatus),
@@ -323,7 +361,7 @@ export default function WorkflowChatInterface({
       title: "Analyze",
       icon: Brain,
       completed: [
-        "requirements_analyzed",
+        "processing_edited_requirements",
         "test_cases_generated",
         "completed",
       ].includes(sessionStatus),
@@ -504,60 +542,102 @@ export default function WorkflowChatInterface({
                 </>
               ) : (
                 /* Analysis Review & Edit */
-                <>
-                  <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <Edit3 className="w-6 h-6 text-amber-400" />
-                        <h2 className="text-xl font-bold text-white">
-                          Review & Edit Analysis
-                        </h2>
-                      </div>
-                      <button
-                        onClick={handleRegenerateAnalysis}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        Regenerate
-                      </button>
-                    </div>
-                    <p className="text-slate-400">
-                      Review and edit the AI-generated analysis before
-                      continuing
-                    </p>
-                  </div>
-
-                  <div className="p-6 bg-slate-800/50 border border-slate-700/30 rounded-2xl">
-                    <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <div className="p-6 bg-slate-800/50 border border-slate-700/30 rounded-2xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-white font-semibold flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-blue-400" />
                       Analysis Result:
                     </h3>
+                  </div>
+
+                  {/* Formatted Display */}
+                  <div className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 max-h-[400px] overflow-y-auto mb-4">
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      {editedAnalysis.split("\n").map((line, index) => {
+                        // Handle headers
+                        if (line.startsWith("### ")) {
+                          return (
+                            <h3
+                              key={index}
+                              className="text-lg font-bold text-white mt-4 mb-2"
+                            >
+                              {line.replace("### ", "")}
+                            </h3>
+                          );
+                        }
+                        if (line.startsWith("## ")) {
+                          return (
+                            <h2
+                              key={index}
+                              className="text-xl font-bold text-white mt-4 mb-2"
+                            >
+                              {line.replace("## ", "")}
+                            </h2>
+                          );
+                        }
+                        if (line.startsWith("# ")) {
+                          return (
+                            <h1
+                              key={index}
+                              className="text-2xl font-bold text-white mt-4 mb-2"
+                            >
+                              {line.replace("# ", "")}
+                            </h1>
+                          );
+                        }
+
+                        // Handle bold text
+                        const boldText = line.replace(
+                          /\*\*(.*?)\*\*/g,
+                          '<strong class="font-bold text-white">$1</strong>'
+                        );
+
+                        // Handle bullet points
+                        if (
+                          line.trim().startsWith("*   ") ||
+                          line.trim().startsWith("- ")
+                        ) {
+                          return (
+                            <li
+                              key={index}
+                              className="ml-4 text-slate-300"
+                              dangerouslySetInnerHTML={{
+                                __html: boldText.replace(/^\*   |^- /, ""),
+                              }}
+                            />
+                          );
+                        }
+
+                        // Empty lines
+                        if (line.trim() === "") {
+                          return <br key={index} />;
+                        }
+
+                        // Regular paragraphs
+                        return (
+                          <p
+                            key={index}
+                            className="text-slate-300 mb-2"
+                            dangerouslySetInnerHTML={{ __html: boldText }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Edit textarea */}
+                  <details className="group">
+                    <summary className="cursor-pointer text-amber-400 text-sm font-medium mb-2 hover:text-amber-300">
+                      ✏️ Click to edit the analysis
+                    </summary>
                     <textarea
                       value={editedAnalysis}
                       onChange={(e) => setEditedAnalysis(e.target.value)}
                       className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 min-h-[350px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm font-mono"
                       disabled={loading}
                     />
-                  </div>
-
-                  <button
-                    onClick={handleSaveAnalysis}
-                    disabled={loading || !editedAnalysis}
-                    className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-5 h-5" />
-                        Save & Continue to Generate Tests
-                      </>
-                    )}
-                  </button>
-                </>
+                  </details>
+                </div>
               )}
             </div>
           )}

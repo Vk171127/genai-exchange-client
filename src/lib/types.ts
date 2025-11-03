@@ -69,6 +69,25 @@ export interface AnalyzeRequirementsResponse {
   message: string;
 }
 
+export interface Requirement {
+  id: string;
+  session_id: string;
+  original_content: string;
+  edited_content: string | null;
+  requirement_type: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: "active" | "inactive" | "archived" | "draft";
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionRequirementsResponse {
+  session_id: string;
+  requirements: Requirement[];
+  total_count: number;
+}
+
 export interface GenerateTestCasesResponse {
   session_id: string;
   status: string;
