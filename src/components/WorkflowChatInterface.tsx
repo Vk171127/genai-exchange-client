@@ -13,7 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import FetchContextModal from "@/components/FetchContextModal";
-import TestCaseList from "@/components/TestCaseList";
+import TestCaseList from "@/components/TestCaseCard";
 import {
   getSessionDetails,
   fetchRAGContext,
@@ -21,10 +21,12 @@ import {
   editRequirements,
   generateTestCases,
   getSessionRequirements,
+  getActiveSessions,
 } from "@/lib/api";
 import Link from "next/link";
 import Sitemap from "./SiteMap";
-import { Requirement } from "@/lib/types";
+import { generatedTestCasesDummyData, Requirement } from "@/lib/types";
+import TestCaseCard from "@/components/TestCaseCard";
 
 export interface TestCase {
   id: string;
@@ -71,7 +73,6 @@ export default function WorkflowChatInterface({
 
   // Analyze state
   const [analysisPrompt, setAnalysisPrompt] = useState("");
-  const [analysisResult, setAnalysisResult] = useState("");
   const [editedAnalysis, setEditedAnalysis] = useState("");
   const [showAnalysisInput, setShowAnalysisInput] = useState(true);
 
@@ -98,7 +99,7 @@ export default function WorkflowChatInterface({
       setSessionStatus(response.status as SessionStatus);
       console.log(response);
       // Determine current step and load data based on status
-      determineCurrentStep(response.status as SessionStatus, response);
+      determineCurrentStep(response?.status as SessionStatus, response);
     } catch (error) {
       console.error("Error loading session details:", error);
     }
@@ -123,7 +124,6 @@ export default function WorkflowChatInterface({
             r.requirement_type === "non_functional"
         );
         if (analysisReq) {
-          setAnalysisResult(analysisReq.original_content);
           setEditedAnalysis(
             analysisReq.edited_content || analysisReq.original_content
           );
@@ -143,13 +143,21 @@ export default function WorkflowChatInterface({
         break;
 
       case "test_cases_generated":
-        // Load test cases
+        // ✅ FIXED: First set the test cases, then select them
         if (details.test_cases && details.test_cases.length > 0) {
           setGeneratedTestCases(details.test_cases);
-          const allIds = new Set<string>(
-            details.test_cases.map((tc: TestCase) => tc.id)
-          );
-          setSelectedTestIds(allIds);
+
+          // ✅ Use setTimeout to ensure state updates properly
+          setTimeout(() => {
+            const allIds = new Set<string>(
+              generatedTestCasesDummyData.map((tc: any) => tc.id)
+            );
+            setSelectedTestIds(allIds);
+          }, 0);
+        } else {
+          // Clear selections if no test cases
+          setGeneratedTestCases([]);
+          setSelectedTestIds(new Set());
         }
         setCurrentStep("export");
         break;
@@ -158,8 +166,8 @@ export default function WorkflowChatInterface({
         setCurrentStep("export");
         break;
 
-      default:
-        setCurrentStep("fetch");
+      // default:
+      //   setCurrentStep("fetch");
     }
   };
 
@@ -179,24 +187,7 @@ export default function WorkflowChatInterface({
   };
 
   // ==================== STEP 2: ANALYZE REQUIREMENTS ====================
-  // const handleAnalyzeRequirements = async () => {
-  //   if (!analysisPrompt.trim()) return;
 
-  //   setLoading(true);
-  //   try {
-  //     const result = await analyzeRequirements(sessionId, analysisPrompt);
-  //     console.log(result);
-  //     setAnalysisResult(result?.analysis);
-  //     setEditedAnalysis(result?.analysis);
-  //     setShowAnalysisInput(false); // Switch to edit view
-  //     await loadSessionDetails(); // Refresh session status
-  //   } catch (error) {
-  //     console.error("Analysis error:", error);
-  //     alert("Failed to analyze requirements. Please try again.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
   const handleAnalyzeRequirements = async () => {
     if (!analysisPrompt.trim()) return;
 
@@ -207,10 +198,12 @@ export default function WorkflowChatInterface({
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      const requirements = await getSessionRequirements(sessionId);
-      console.log("📋 Fetched requirements:", requirements);
+      // const requirements = await getSessionRequirements(sessionId);
+      // console.log("📋 Fetched requirements:", requirements);
 
-      setAnalysisResult(requirements[0].original_content);
+      const data = await getSessionDetails(sessionId);
+      const requirements = data.requirements;
+
       setEditedAnalysis(requirements[0].original_content);
       setShowAnalysisInput(false); // Switch to edit view
       console.log("ea", editedAnalysis);
@@ -232,8 +225,11 @@ export default function WorkflowChatInterface({
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      const updatedRequirements = await getSessionRequirements(sessionId);
-      console.log("📋 Fetched updated requirements:", updatedRequirements);
+      // const updatedRequirements = await getSessionRequirements(sessionId);
+      // console.log("📋 Fetched updated requirements:", updatedRequirements);
+
+      const data = await getSessionDetails(sessionId);
+      const updatedRequirements = data.requirements;
 
       if (updatedRequirements.length > 0) {
         // Use edited_content if available, otherwise original_content
@@ -241,7 +237,6 @@ export default function WorkflowChatInterface({
           updatedRequirements[0].edited_content ||
           updatedRequirements[0].original_content;
 
-        setAnalysisResult(latestContent);
         setEditedAnalysis(latestContent);
       }
 
@@ -253,13 +248,6 @@ export default function WorkflowChatInterface({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRegenerateAnalysis = () => {
-    setAnalysisPrompt("");
-    setAnalysisResult("");
-    setEditedAnalysis("");
-    setShowAnalysisInput(true);
   };
 
   // ==================== STEP 3: GENERATE TEST CASES ====================
@@ -277,10 +265,12 @@ export default function WorkflowChatInterface({
 
       if (sessionDetails?.test_cases && sessionDetails.test_cases.length > 0) {
         setGeneratedTestCases(sessionDetails.test_cases);
+        // ✅ Auto-select all
         const allIds = new Set<string>(
           sessionDetails.test_cases.map((tc: TestCase) => tc.id)
         );
         setSelectedTestIds(allIds);
+        console.log(selectedTestIds);
       }
     } catch (error) {
       console.error("Test generation error:", error);
@@ -301,16 +291,6 @@ export default function WorkflowChatInterface({
       return newSet;
     });
   };
-
-  const handleToggleSelectAll = () => {
-    if (selectedTestIds.size === generatedTestCases.length) {
-      setSelectedTestIds(new Set());
-    } else {
-      const allIds = new Set(generatedTestCases.map((tc) => tc.id));
-      setSelectedTestIds(allIds);
-    }
-  };
-
   const handleExportConfirm = async () => {
     setLoading(true);
     try {
@@ -626,17 +606,14 @@ export default function WorkflowChatInterface({
                   </div>
 
                   {/* Edit textarea */}
-                  <details className="group">
-                    <summary className="cursor-pointer text-amber-400 text-sm font-medium mb-2 hover:text-amber-300">
-                      ✏️ Click to edit the analysis
-                    </summary>
-                    <textarea
-                      value={editedAnalysis}
-                      onChange={(e) => setEditedAnalysis(e.target.value)}
-                      className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 min-h-[350px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm font-mono"
-                      disabled={loading}
-                    />
-                  </details>
+
+                  <textarea
+                    value={editedAnalysis}
+                    onChange={(e) => setEditedAnalysis(e.target.value)}
+                    className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 min-h-[350px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm font-mono"
+                    disabled={loading}
+                  />
+                  <button onClick={handleSaveAnalysis}>Save Changes</button>
                 </div>
               )}
             </div>
@@ -685,6 +662,7 @@ export default function WorkflowChatInterface({
           {/* ==================== EXPORT STEP ==================== */}
           {currentStep === "export" && sessionStatus !== "completed" && (
             <div className="space-y-6">
+              {/* Header */}
               <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -695,62 +673,61 @@ export default function WorkflowChatInterface({
                       </h2>
                       <p className="text-slate-400 text-sm">
                         Select test cases to export to{" "}
-                        {sessionDetails?.alm_tool || "ADO/Jira"}
+                        {sessionDetails?.alm_tool}
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* Counter and Select All Button */}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-700/30">
+                  <span className="text-slate-400 text-sm font-medium">
+                    {selectedTestIds.size} of{" "}
+                    {generatedTestCasesDummyData.length} selected
+                  </span>
                   <button
-                    onClick={handleToggleSelectAll}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                    onClick={() => {
+                      if (
+                        selectedTestIds.size ===
+                        generatedTestCasesDummyData.length
+                      ) {
+                        setSelectedTestIds(new Set());
+                      } else {
+                        const allIds = new Set(
+                          generatedTestCasesDummyData.map((tc) => tc.id)
+                        );
+                        setSelectedTestIds(allIds);
+                      }
+                    }}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg"
                   >
-                    {selectedTestIds.size === generatedTestCases.length
+                    {selectedTestIds.size === generatedTestCasesDummyData.length
                       ? "Deselect All"
                       : "Select All"}
                   </button>
                 </div>
               </div>
 
-              {/* Test Case Selection List */}
-              <div className="space-y-3">
-                {generatedTestCases.map((testCase) => (
-                  <div
-                    key={testCase.id}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                      selectedTestIds.has(testCase.id)
-                        ? "bg-blue-500/10 border-blue-500/50"
-                        : "bg-slate-800/50 border-slate-700/30 hover:border-slate-600"
-                    }`}
-                    onClick={() => handleToggleTestSelection(testCase.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedTestIds.has(testCase.id)}
-                        onChange={() => handleToggleTestSelection(testCase.id)}
-                        className="mt-1 w-5 h-5 rounded border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <div className="flex-1">
-                        <h3 className="text-white font-semibold mb-1">
-                          {testCase.test_name}
-                        </h3>
-                        <p className="text-slate-400 text-sm">
-                          {testCase.test_description}
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                          <span className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs">
-                            {testCase.test_type}
-                          </span>
-                          <span className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs">
-                            {testCase.priority}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+              {/* Test Cases List */}
+              <div className="space-y-4">
+                {generatedTestCasesDummyData.length > 0 ? (
+                  generatedTestCasesDummyData.map((testCase) => (
+                    <TestCaseCard
+                      key={testCase.id}
+                      testCase={testCase}
+                      isSelected={selectedTestIds.has(testCase.id)}
+                      onToggleSelect={handleToggleTestSelection}
+                    />
+                  ))
+                ) : (
+                  <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/30">
+                    <Upload className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                    <p className="text-slate-400">No test cases available</p>
                   </div>
-                ))}
+                )}
               </div>
 
+              {/* Export Button */}
               <button
                 onClick={() => setShowExportModal(true)}
                 disabled={selectedTestIds.size === 0 || loading}
@@ -759,7 +736,7 @@ export default function WorkflowChatInterface({
                 <Upload className="w-5 h-5" />
                 Export {selectedTestIds.size} Test Case
                 {selectedTestIds.size !== 1 ? "s" : ""} to{" "}
-                {sessionDetails?.alm_tool || "ADO/Jira"}
+                {sessionDetails?.alm_tool}
               </button>
             </div>
           )}

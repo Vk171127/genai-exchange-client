@@ -368,6 +368,7 @@ export async function editRequirements(
             {
               text:
                 "edited; " +
+                `sessionID: ${sessionId};  ` +
                 requirements +
                 "Make sure to save the analysis in database.",
             },
@@ -440,6 +441,7 @@ export async function generateTestCases(
             {
               text:
                 "approved; " +
+                `sessionID: ${sessionId};  ` +
                 prompt +
                 "Make sure to save the test-cases in database.",
             },
