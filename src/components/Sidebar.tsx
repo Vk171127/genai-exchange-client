@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, Menu, X, MessageSquare, Settings } from "lucide-react";
 import type { Session } from "@/lib/types";
 import { getActiveSessions } from "@/lib/api";
@@ -19,25 +19,13 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    fetchActiveSessions();
-  }, []);
-
-  // ✅ Refresh sessions when sessionId changes (status updated)
-  useEffect(() => {
-    fetchActiveSessions();
-  }, [sessionId]);
-
-  // ✅ Poll for updates every 10 seconds to catch status changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchActiveSessions();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval);
-  }, []);
+  // ✅ Track if we're currently fetching to prevent duplicate calls
+  const isFetchingRef = useRef(false);
 
   const fetchActiveSessions = async () => {
+    if (isFetchingRef.current) return;
+
+    isFetchingRef.current = true;
     try {
       const { sessions } = await getActiveSessions();
 
@@ -50,8 +38,27 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
       setActiveSessions(sortedSessions);
     } catch (error) {
       console.error("Failed to fetch active sessions:", error);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    fetchActiveSessions();
+  }, []);
+
+  useEffect(() => {
+    const handleSessionUpdate = () => {
+      console.log("📢 Session updated, refreshing sidebar...");
+      fetchActiveSessions();
+    };
+
+    window.addEventListener("session-updated", handleSessionUpdate);
+
+    return () => {
+      window.removeEventListener("session-updated", handleSessionUpdate);
+    };
+  }, []);
 
   const handleSessionCreated = () => {
     fetchActiveSessions();
@@ -81,12 +88,14 @@ export default function Sidebar({ sessionId, isOpen, onToggle }: SidebarProps) {
     });
   };
 
-  // ✅ Get status display label
   const getStatusLabel = (status: string) => {
     const statusMap: Record<string, string> = {
       created: "In Progress",
+      in_progress: "In Progress",
       rag_context_loaded: "Context Loaded",
       requirements_analyzed: "Analyzed",
+      processing_edited_requirements: "Analyzed",
+      generating_test_cases: "Generating",
       test_cases_generated: "Tests Generated",
       completed: "Completed",
     };

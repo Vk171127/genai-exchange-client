@@ -13,7 +13,6 @@ import {
   Loader2,
 } from "lucide-react";
 import FetchContextModal from "@/components/FetchContextModal";
-import TestCaseList from "@/components/TestCaseCard";
 import {
   getSessionDetails,
   fetchRAGContext,
@@ -25,23 +24,9 @@ import {
 } from "@/lib/api";
 import Link from "next/link";
 import Sitemap from "./SiteMap";
-import { generatedTestCasesDummyData, Requirement } from "@/lib/types";
 import TestCaseCard from "@/components/TestCaseCard";
-
-export interface TestCase {
-  id: string;
-  session_id: string;
-  test_name: string;
-  test_description: string;
-  test_steps: string[];
-  expected_results: string;
-  test_type: string;
-  priority: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  linked_requirements: string[];
-}
+import { useRouter } from "next/navigation";
+import { sampleTestCases, TestCase } from "@/lib/types";
 
 export interface WorkflowChatInterfaceProps {
   sessionId: string;
@@ -67,6 +52,9 @@ export default function WorkflowChatInterface({
     useState<SessionStatus>("in_progress");
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("fetch");
   const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   // Fetch Context state
   const [showFetchModal, setShowFetchModal] = useState(false);
@@ -93,20 +81,32 @@ export default function WorkflowChatInterface({
   }, [sessionId]);
 
   const loadSessionDetails = async () => {
+    setIsInitialLoading(true);
     try {
       const response = await getSessionDetails(sessionId);
       setSessionDetails(response);
       setSessionStatus(response.status as SessionStatus);
       console.log(response);
-      // Determine current step and load data based on status
-      determineCurrentStep(response?.status as SessionStatus, response);
+      determineCurrentStep(response);
     } catch (error) {
-      console.error("Error loading session details:", error);
+      console.error("Error loading session:", error);
+      if ((error as any).status === 404) {
+        setError(
+          "This session doesn't exist or may have been deleted. Please check the URL or create a new session."
+        );
+      } else {
+        setError(
+          "We couldn't load this session. Please try again or return to the dashboard."
+        );
+      }
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
-  const determineCurrentStep = (status: SessionStatus, details: any) => {
-    switch (status) {
+  const determineCurrentStep = (details: any) => {
+    console.log("status:", details.status);
+    switch (details.status) {
       case "in_progress":
         setCurrentStep("fetch");
         break;
@@ -143,22 +143,22 @@ export default function WorkflowChatInterface({
         break;
 
       case "test_cases_generated":
-        // ✅ FIXED: First set the test cases, then select them
-        if (details.test_cases && details.test_cases.length > 0) {
-          setGeneratedTestCases(details.test_cases);
+        // ✅ Use session test cases if available, otherwise use sample data
+        const testCasesToUse =
+          details.test_cases && details.test_cases.length > 0
+            ? details.test_cases
+            : sampleTestCases;
 
-          // ✅ Use setTimeout to ensure state updates properly
-          setTimeout(() => {
-            const allIds = new Set<string>(
-              generatedTestCasesDummyData.map((tc: any) => tc.id)
-            );
-            setSelectedTestIds(allIds);
-          }, 0);
-        } else {
-          // Clear selections if no test cases
-          setGeneratedTestCases([]);
-          setSelectedTestIds(new Set());
-        }
+        setGeneratedTestCases(testCasesToUse);
+
+        // ✅ Auto-select all test cases
+        setTimeout(() => {
+          const allIds = new Set<string>(
+            testCasesToUse.map((tc: any) => tc.id)
+          );
+          setSelectedTestIds(allIds);
+        }, 0);
+
         setCurrentStep("export");
         break;
 
@@ -171,16 +171,21 @@ export default function WorkflowChatInterface({
     }
   };
 
+  const notifySidebarUpdate = () => {
+    window.dispatchEvent(new CustomEvent("session-updated"));
+  };
+
   // ==================== STEP 1: FETCH CONTEXT ====================
   const handleContextFetched = async (summary: string, prompt: string) => {
     setLoading(true);
     try {
       await fetchRAGContext(sessionId, prompt);
       setShowFetchModal(false);
-      await loadSessionDetails(); // Refresh to get new status
+      await loadSessionDetails();
+      notifySidebarUpdate();
     } catch (error) {
       console.error("Fetch context error:", error);
-      alert("Failed to fetch context. Please try again.");
+      setError("Failed to fetch context. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -210,9 +215,10 @@ export default function WorkflowChatInterface({
 
       // Step 4: Refresh session status
       await loadSessionDetails();
+      notifySidebarUpdate();
     } catch (error) {
       console.error("Analysis error:", error);
-      alert("Failed to analyze requirements. Please try again.");
+      setError("Failed to analyze requirements. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -242,9 +248,10 @@ export default function WorkflowChatInterface({
 
       // Step 4: Refresh session to move to next step
       await loadSessionDetails();
+      notifySidebarUpdate();
     } catch (error) {
       console.error("Save analysis error:", error);
-      alert("Failed to save analysis. Please try again.");
+      setError("Failed to save analysis. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -262,23 +269,28 @@ export default function WorkflowChatInterface({
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       await loadSessionDetails();
+      notifySidebarUpdate();
 
-      if (sessionDetails?.test_cases && sessionDetails.test_cases.length > 0) {
-        setGeneratedTestCases(sessionDetails.test_cases);
-        // ✅ Auto-select all
-        const allIds = new Set<string>(
-          sessionDetails.test_cases.map((tc: TestCase) => tc.id)
-        );
-        setSelectedTestIds(allIds);
-        console.log(selectedTestIds);
-      }
+      // ✅ Use session test cases if available, otherwise use sample data
+      const updatedSession = await getSessionDetails(sessionId);
+      const testCasesToUse =
+        updatedSession?.test_cases && updatedSession.test_cases.length > 0
+          ? updatedSession.test_cases
+          : sampleTestCases;
+
+      setGeneratedTestCases(testCasesToUse);
+      const allIds = new Set<string>(
+        testCasesToUse.map((tc: TestCase) => tc.id)
+      );
+      setSelectedTestIds(allIds);
     } catch (error) {
       console.error("Test generation error:", error);
-      alert("Failed to generate test cases. Please try again.");
+      setError("Failed to generate test cases. Please try after some time.");
     } finally {
       setLoading(false);
     }
   };
+
   // ==================== STEP 4: EXPORT ====================
   const handleToggleTestSelection = (testId: string) => {
     setSelectedTestIds((prev) => {
@@ -314,7 +326,7 @@ export default function WorkflowChatInterface({
       setSessionStatus("completed");
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to export test cases. Please try again.");
+      setError("Failed to export test cases. Please try again.");
       setShowExportModal(false);
     } finally {
       setLoading(false);
@@ -363,9 +375,58 @@ export default function WorkflowChatInterface({
     },
   ];
 
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-300 text-lg">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-3">
+            {error === "Session not found"
+              ? "Session Not Found"
+              : "Error Loading Session"}
+          </h2>
+          <p className="text-slate-400 mb-8">
+            {error === "Session not found"
+              ? "The session you're looking for doesn't exist or has been deleted."
+              : error}
+          </p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => router.back()}
+              className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Go Back
+            </button>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Header */}
+
       <header className="bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -613,7 +674,20 @@ export default function WorkflowChatInterface({
                     className="w-full p-4 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-300 min-h-[350px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 text-sm font-mono"
                     disabled={loading}
                   />
-                  <button onClick={handleSaveAnalysis}>Save Changes</button>
+                  <button
+                    onClick={handleSaveAnalysis}
+                    disabled={loading || !analysisPrompt.trim()}
+                    className="w-full px-4 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Saving Requirements...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </button>
                 </div>
               )}
             </div>
@@ -664,44 +738,41 @@ export default function WorkflowChatInterface({
             <div className="space-y-6">
               {/* Header */}
               <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/30">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between">
+                  {/* Left side - Icon, Title, Description */}
                   <div className="flex items-center gap-3">
                     <Upload className="w-6 h-6 text-amber-400" />
                     <div>
                       <h2 className="text-xl font-bold text-white">
-                        Export Test Cases
+                        Export Test Cases{" "}
+                        <span className="text-slate-400 text-[12px] font-medium whitespace-nowrap">
+                          {"("}
+                          {selectedTestIds.size} of {generatedTestCases.length}{" "}
+                          selected{")"}
+                        </span>
                       </h2>
                       <p className="text-slate-400 text-sm">
                         Select test cases to export to{" "}
-                        {sessionDetails?.alm_tool}
+                        {sessionDetails?.alm_tool || "ADO/Jira"}
                       </p>
                     </div>
                   </div>
-                </div>
 
-                {/* Counter and Select All Button */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-700/30">
-                  <span className="text-slate-400 text-sm font-medium">
-                    {selectedTestIds.size} of{" "}
-                    {generatedTestCasesDummyData.length} selected
-                  </span>
+                  {/* Right side - Select All Button */}
                   <button
                     onClick={() => {
-                      if (
-                        selectedTestIds.size ===
-                        generatedTestCasesDummyData.length
-                      ) {
+                      if (selectedTestIds.size === generatedTestCases.length) {
                         setSelectedTestIds(new Set());
                       } else {
                         const allIds = new Set(
-                          generatedTestCasesDummyData.map((tc) => tc.id)
+                          generatedTestCases.map((tc) => tc.id)
                         );
                         setSelectedTestIds(allIds);
                       }
                     }}
                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg"
                   >
-                    {selectedTestIds.size === generatedTestCasesDummyData.length
+                    {selectedTestIds.size === generatedTestCases.length
                       ? "Deselect All"
                       : "Select All"}
                   </button>
@@ -710,8 +781,8 @@ export default function WorkflowChatInterface({
 
               {/* Test Cases List */}
               <div className="space-y-4">
-                {generatedTestCasesDummyData.length > 0 ? (
-                  generatedTestCasesDummyData.map((testCase) => (
+                {generatedTestCases.length > 0 ? (
+                  generatedTestCases.map((testCase) => (
                     <TestCaseCard
                       key={testCase.id}
                       testCase={testCase}
@@ -736,7 +807,7 @@ export default function WorkflowChatInterface({
                 <Upload className="w-5 h-5" />
                 Export {selectedTestIds.size} Test Case
                 {selectedTestIds.size !== 1 ? "s" : ""} to{" "}
-                {sessionDetails?.alm_tool}
+                {sessionDetails?.alm_tool || "ADO/Jira"}
               </button>
             </div>
           )}

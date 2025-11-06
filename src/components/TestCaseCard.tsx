@@ -85,10 +85,10 @@ const TestCaseCard = ({
               {/* Priority Badge */}
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-semibold ${getPriorityStyles(
-                  testCase.priority
+                  testCase.priority || "Medium"
                 )}`}
               >
-                {getPriorityIcon(testCase.priority)}
+                {getPriorityIcon(testCase.priority || "Medium")}
                 {testCase.priority}
               </span>
 
@@ -131,7 +131,7 @@ const TestCaseCard = ({
                 Test Steps
               </h4>
               <div className="space-y-2">
-                {testCase.test_steps.map((step, index) => (
+                {testCase.test_steps?.map((step, index) => (
                   <div
                     key={index}
                     className="flex gap-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-colors"
