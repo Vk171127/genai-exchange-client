@@ -1,4 +1,6 @@
-import React from "react";
+// app/page.tsx
+"use client";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -8,10 +10,26 @@ import {
   Users,
   CheckCircle,
   Brain,
+  HelpCircle,
 } from "lucide-react";
 import Sitemap from "@/components/SiteMap";
+import { useAppTour } from "@/hooks/useAppTour";
 
 export default function HomePage() {
+  const { startHomeTour } = useAppTour();
+
+  // Auto-start tour on first visit
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem("home-tour-completed");
+    if (!hasSeenTour) {
+      // Delay tour start to ensure DOM is ready
+      const timer = setTimeout(() => {
+        startHomeTour();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       {/* Navigation */}
@@ -26,13 +44,24 @@ export default function HomePage() {
             </span>
           </div>
 
-          <Link
-            href="/dashboard"
-            className="group px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
-          >
-            Dashboard
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* ✅ Tour Button */}
+            <button
+              onClick={startHomeTour}
+              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-300 border border-white/20"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Tour</span>
+            </button>
+
+            <Link
+              href="/dashboard"
+              className="group px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
+            >
+              Dashboard
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -70,9 +99,21 @@ export default function HomePage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
+              {/* ✅ Hero CTA Button - Tour Target */}
               <Link
                 href="/dashboard"
-                className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                onClick={() => {
+                  const activeDriver = document.querySelector(".driver-active");
+                  if (activeDriver) {
+                    localStorage.setItem("home-tour-completed", "true");
+
+                    const overlay = document.querySelector(".driver-overlay");
+                    const popover = document.querySelector(".driver-popover");
+                    if (overlay) overlay.remove();
+                    if (popover) popover.remove();
+                  }
+                }}
+                className="hero-cta-button group px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-2xl transform  flex items-center justify-center gap-2"
               >
                 Start Testing Now
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -102,8 +143,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Features Section */}
-      <div className="relative bg-white/5 backdrop-blur-sm border-t border-white/10">
+      <div className=" relative bg-white/5 backdrop-blur-sm border-t border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-20">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-white mb-4">
@@ -115,7 +155,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Features Section - ✅ Tour Target */}
+          <div className=" feature-cards-section grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <FeatureCard
               icon={Shield}
               title="HIPAA Compliant"
@@ -140,7 +181,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* How It Works */}
+      {/* How It Works - ✅ Tour Target */}
       <div className="max-w-7xl mx-auto px-6 py-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -148,11 +189,11 @@ export default function HomePage() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="step-cards-section grid grid-cols-1 md:grid-cols-3 gap-8">
           <StepCard
             number="1"
-            title="Upload Context"
-            description="Provide your healthcare application requirements, HIPAA guidelines, or medical workflows"
+            title="Provide Prompt"
+            description="Describe your healthcare application requirements, HIPAA guidelines, or medical workflows"
           />
           <StepCard
             number="2"

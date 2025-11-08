@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 "use client";
 import React, { useState, useEffect } from "react";
 import {
@@ -10,6 +11,7 @@ import {
   Search,
   Filter,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@/lib/types";
@@ -17,6 +19,7 @@ import { getActiveSessions } from "@/lib/api";
 import NewSessionModal from "@/components/NewSessionModal";
 import { SessionCard } from "@/components/SessionCard";
 import Sitemap from "@/components/SiteMap";
+import { useAppTour } from "@/hooks/useAppTour";
 
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -24,10 +27,22 @@ export default function DashboardPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const router = useRouter();
+  const { startDashboardTour } = useAppTour();
 
   useEffect(() => {
     loadSessions();
   }, []);
+
+  // Auto-start tour on first visit
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem("dashboard-tour-completed");
+    if (!hasSeenTour && !loading) {
+      const timer = setTimeout(() => {
+        startDashboardTour();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const loadSessions = async () => {
     try {
@@ -41,7 +56,6 @@ export default function DashboardPage() {
   };
 
   const handleSessionCreated = (sessionId: string) => {
-    // Refresh session list after creating new session
     loadSessions();
   };
 
@@ -92,6 +106,16 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* ✅ Tour Button */}
+              <button
+                onClick={startDashboardTour}
+                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-300 border border-white/20"
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span className="hidden sm:inline">Tour</span>
+              </button>
+
+              {/* ✅ New Session Button - Tour Target */}
               <button
                 onClick={() => setShowNewModal(true)}
                 className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5"
@@ -133,8 +157,9 @@ export default function DashboardPage() {
             Manage automated test case generation for healthcare applications
           </p>
         </div>
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+
+        {/* ✅ Stats Cards - Tour Target */}
+        <div className="stats-cards-row grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <StatsCard
             icon={Activity}
             title="Total Sessions"
@@ -169,7 +194,8 @@ export default function DashboardPage() {
 
         {/* Search and Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
+          {/* ✅ Search Bar - Tour Target */}
+          <div className="search-bar relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
@@ -185,7 +211,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Sessions Grid */}
+        {/* ✅ Sessions Grid - Tour Target */}
         {loading ? (
           <div className="text-center py-20">
             <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -196,7 +222,7 @@ export default function DashboardPage() {
         ) : filteredSessions.length === 0 ? (
           <EmptyState onCreateSession={() => setShowNewModal(true)} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="sessions-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredSessions.map((session) => (
               <SessionCard key={session.id} session={session} />
             ))}
